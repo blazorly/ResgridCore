@@ -10,6 +10,7 @@ using Resgrid.Model.Repositories;
 using Resgrid.Model.Services;
 using Resgrid.Providers.Bus;
 using Resgrid.Model.Identity;
+using System.Transactions;
 
 namespace Resgrid.Services
 {
@@ -69,36 +70,38 @@ namespace Resgrid.Services
 			}
 
 			var saved = await _departmentGroupsRepository.SaveOrUpdateAsync(departmentGroup, cancellationToken);
-			InvalidateGroupInCache(departmentGroup.DepartmentGroupId);
+			await InvalidateGroupInCache(departmentGroup.DepartmentGroupId);
 
 			return saved;
 		}
 
 		public async Task<List<DepartmentGroup>> GetAllGroupsForDepartmentAsync(int departmentId)
 		{
-			List<DepartmentGroup> departmentGroups = new List<DepartmentGroup>();
+			//List<DepartmentGroup> departmentGroups = new List<DepartmentGroup>();
 
-			var groups = await GetAllGroupsForDepartmentUnlimitedAsync(departmentId);
+			//var groups = await GetAllGroupsForDepartmentUnlimitedAsync(departmentId);
 
-			int limit = 0;
-			if (Config.SystemBehaviorConfig.RedirectHomeToLogin)
-				limit = int.MaxValue;
-			else
-				limit = (await _subscriptionsService.GetCurrentPlanForDepartmentAsync(departmentId)).GetLimitForTypeAsInt(PlanLimitTypes.Groups);
+			//int limit = 0;
+			//if (Config.SystemBehaviorConfig.RedirectHomeToLogin)
+			//	limit = int.MaxValue;
+			//else
+			//	limit = (await _subscriptionsService.GetCurrentPlanForDepartmentAsync(departmentId)).GetLimitForTypeAsInt(PlanLimitTypes.Groups);
 
-			int count = groups.Count < limit ? groups.Count : limit;
+			//int count = groups.Count < limit ? groups.Count : limit;
 
-			// Only return users up to the plans group limit
-			for (int i = 0; i < count; i++)
-			{
-				departmentGroups.Add(groups[i]);
-			}
+			//// Only return users up to the plans group limit
+			//for (int i = 0; i < count; i++)
+			//{
+			//	departmentGroups.Add(groups[i]);
+			//}
+
+			var departmentGroups = await GetAllGroupsForDepartmentUnlimitedAsync(departmentId);
 
 			foreach (var group in departmentGroups)
 			{
 				if (group.ParentDepartmentGroupId.HasValue)
 				{
-					group.Parent = await GetGroupByIdAsync(group.ParentDepartmentGroupId.Value);
+					group.Parent = await GetGroupByIdAsync(group.ParentDepartmentGroupId.Value, false);
 				}
 
 				var childGroups = await _departmentGroupsRepository.GetAllGroupsByParentGroupIdAsync(group.DepartmentGroupId);
@@ -112,9 +115,9 @@ namespace Resgrid.Services
 			return departmentGroups;
 		}
 
-		public void InvalidateGroupInCache(int groupId)
+		public async Task InvalidateGroupInCache(int groupId)
 		{
-			_cacheProvider.Remove(string.Format(CacheKey, groupId));
+			await _cacheProvider.RemoveAsync(string.Format(CacheKey, groupId));
 		}
 
 		public async Task<List<DepartmentGroup>> GetAllGroupsForDepartmentUnlimitedAsync(int departmentId)
@@ -128,7 +131,7 @@ namespace Resgrid.Services
 
 				if (g.ParentDepartmentGroupId.HasValue)
 				{
-					g.Parent = await GetGroupByIdAsync(g.ParentDepartmentGroupId.Value);
+					g.Parent = await GetGroupByIdAsync(g.ParentDepartmentGroupId.Value, false);
 				}
 
 				var childGroups = await _departmentGroupsRepository.GetAllGroupsByParentGroupIdAsync(g.DepartmentGroupId);
@@ -138,6 +141,13 @@ namespace Resgrid.Services
 				else
 					g.Children = new List<DepartmentGroup>();
 			}
+
+			return groups.ToList();
+		}
+
+		public async Task<List<DepartmentGroup>> GetAllGroupsForDepartmentUnlimitedThinAsync(int departmentId)
+		{
+			var groups = await _departmentGroupsRepository.GetAllGroupsByDepartmentIdAsync(departmentId);
 
 			return groups.ToList();
 		}
@@ -155,7 +165,7 @@ namespace Resgrid.Services
 
 					if (group1.ParentDepartmentGroupId.HasValue)
 					{
-						group1.Parent = await GetGroupByIdAsync(group1.ParentDepartmentGroupId.Value);
+						group1.Parent = await GetGroupByIdAsync(group1.ParentDepartmentGroupId.Value, true);
 					}
 
 					var childGroups = await _departmentGroupsRepository.GetAllGroupsByParentGroupIdAsync(group1.DepartmentGroupId);
@@ -165,7 +175,7 @@ namespace Resgrid.Services
 					else
 						group1.Children = new List<DepartmentGroup>();
 				}
-				
+
 				return group1;
 			}
 
@@ -188,27 +198,67 @@ namespace Resgrid.Services
 			}
 
 			await _departmentGroupsRepository.DeleteAsync(group, cancellationToken);
-			InvalidateGroupInCache(groupId);
+			await InvalidateGroupInCache(groupId);
 
 			return true;
 		}
 
 		public async Task<DepartmentGroup> UpdateAsync(DepartmentGroup departmentGroup, CancellationToken cancellationToken = default(CancellationToken))
 		{
-			//var members =
-			//	await _departmentGroupMembersRepository.GetAllGroupMembersByGroupIdAsync(departmentGroup
-			//		.DepartmentGroupId);
+			var members =
+				await _departmentGroupMembersRepository.GetAllGroupMembersByGroupIdAsync(departmentGroup
+					.DepartmentGroupId);
 
-			//foreach (var departmentGroupMember in members)
-			//{
-			//	await _departmentGroupMembersRepository.DeleteAsync(members, cancellationToken);
-			//}
+			if (departmentGroup.Members != null && departmentGroup.Members.Any())
+			{
+				var membersNoLongerInGroup = members.Where(p => !departmentGroup.Members.Any(p2 => p2.DepartmentGroupMemberId == p.DepartmentGroupMemberId));
 
-			var saved = await _departmentGroupsRepository.SaveOrUpdateAsync(departmentGroup, cancellationToken);
+				foreach (var departmentGroupMember in membersNoLongerInGroup)
+				{
+					await _departmentGroupMembersRepository.DeleteAsync(departmentGroupMember, cancellationToken);
+				}
 
-			InvalidateGroupInCache(departmentGroup.DepartmentGroupId);
+				foreach (var newMember in departmentGroup.Members)
+				{
+					if (!members.Any(x => x.UserId == newMember.UserId))
+					{
+						newMember.DepartmentGroupId = departmentGroup.DepartmentGroupId;
+						await _departmentGroupMembersRepository.SaveOrUpdateAsync(newMember, cancellationToken);
+					}
+				}
+			}
+			else
+			{
+				foreach (var departmentGroupMember in members)
+				{
+					await _departmentGroupMembersRepository.DeleteAsync(departmentGroupMember, cancellationToken);
+				}
+			}
+
+			if (departmentGroup.Address != null)
+				await _addressService.SaveAddressAsync(departmentGroup.Address, cancellationToken);
+
+			var saved = await _departmentGroupsRepository.SaveOrUpdateAsync(departmentGroup, cancellationToken, true);
+
+			await InvalidateGroupInCache(departmentGroup.DepartmentGroupId);
 
 			return saved;
+		}
+
+		public async Task<bool> DeleteAllMembersFromGroupAsync(DepartmentGroup departmentGroup, CancellationToken cancellationToken = default(CancellationToken))
+		{
+			var members =
+				await _departmentGroupMembersRepository.GetAllGroupMembersByGroupIdAsync(departmentGroup
+					.DepartmentGroupId);
+
+			foreach (var departmentGroupMember in members)
+			{
+				await _departmentGroupMembersRepository.DeleteAsync(departmentGroupMember, cancellationToken);
+			}
+
+			await InvalidateGroupInCache(departmentGroup.DepartmentGroupId);
+
+			return true;
 		}
 
 		public async Task<bool> IsUserInAGroupAsync(string userId, int departmentId)
@@ -256,7 +306,7 @@ namespace Resgrid.Services
 			foreach (var membership in groupMemberships)
 			{
 				await _departmentGroupMembersRepository.DeleteAsync(membership, cancellationToken);
-				InvalidateGroupInCache(membership.DepartmentGroupId);
+				await InvalidateGroupInCache(membership.DepartmentGroupId);
 			}
 
 			return true;
@@ -296,11 +346,11 @@ namespace Resgrid.Services
 			return depMember;
 		}
 
-		public DepartmentGroupMember SaveGroupMember(DepartmentGroupMember depMember, CancellationToken cancellationToken = default(CancellationToken))
+		public async Task<DepartmentGroupMember> SaveGroupMember(DepartmentGroupMember depMember, CancellationToken cancellationToken = default(CancellationToken))
 		{
-			_departmentGroupMembersRepository.SaveOrUpdateAsync(depMember, cancellationToken);
+			await _departmentGroupMembersRepository.SaveOrUpdateAsync(depMember, cancellationToken);
 
-			InvalidateGroupInCache(depMember.DepartmentGroupId);
+			await InvalidateGroupInCache(depMember.DepartmentGroupId);
 
 			return depMember;
 		}
@@ -390,7 +440,7 @@ namespace Resgrid.Services
 			depMember.UserId = userId;
 
 			var saved = await _departmentGroupMembersRepository.SaveOrUpdateAsync(depMember, cancellationToken);
-			InvalidateGroupInCache(groupId);
+			await InvalidateGroupInCache(groupId);
 
 			_eventAggregator.SendMessage<UserAssignedToGroupEvent>(new UserAssignedToGroupEvent() { DepartmentId = departmentGroup.DepartmentId, UserId = userId, Group = departmentGroup });
 
@@ -454,6 +504,13 @@ namespace Resgrid.Services
 		public async Task<bool> DeleteGroupMembersByGroupIdAsync(int groupId, int departmentId, CancellationToken cancellationToken = default(CancellationToken))
 		{
 			return await _departmentGroupMembersRepository.DeleteGroupMembersByGroupIdAsync(groupId, departmentId, cancellationToken);
+		}
+
+		public async Task<List<DepartmentGroupMember>> GetAllGroupAdminsByDepartmentIdAsync(int departmentId)
+		{
+			var admins = await _departmentGroupMembersRepository.GetAllGroupAdminsByDepartmentIdAsync(departmentId);
+
+			return admins.ToList();
 		}
 	}
 }

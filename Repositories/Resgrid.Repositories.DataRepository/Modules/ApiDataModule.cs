@@ -5,6 +5,7 @@ using Resgrid.Model.Repositories.Queries;
 using Resgrid.Model.Repositories.Queries.Contracts;
 using Resgrid.Repositories.DataRepository.Configs;
 using Resgrid.Repositories.DataRepository.Queries;
+using Resgrid.Repositories.DataRepository.Servers.PostgreSql;
 using Resgrid.Repositories.DataRepository.Servers.SqlServer;
 using Resgrid.Repositories.DataRepository.Transactions;
 
@@ -15,6 +16,22 @@ namespace Resgrid.Repositories.DataRepository
 		protected override void Load(ContainerBuilder builder)
 		{
 			builder.RegisterType<StandardIsolation>().As<IISolationLevel>().InstancePerLifetimeScope();
+
+			builder.RegisterType<QueryList>().As<IQueryList>().InstancePerLifetimeScope();
+
+			if (Config.DataConfig.DatabaseType == Config.DatabaseTypes.Postgres)
+			{
+				builder.RegisterType<PostgreSqlConfiguration>().As<SqlConfiguration>().InstancePerLifetimeScope();
+				builder.RegisterType<PostgreSqlConnectionProvider>().As<IConnectionProvider>().InstancePerLifetimeScope();
+			}
+			else
+			{
+				builder.RegisterType<SqlServerConfiguration>().As<SqlConfiguration>().InstancePerLifetimeScope();
+				builder.RegisterType<SqlServerConnectionProvider>().As<IConnectionProvider>().InstancePerLifetimeScope();
+			}
+
+			builder.RegisterType<UnitOfWork>().As<IUnitOfWork>().InstancePerLifetimeScope();
+			builder.RegisterType<QueryFactory>().As<IQueryFactory>().InstancePerLifetimeScope();
 
 			// Custom Repositories
 			builder.RegisterType<UserStatesRepository>().As<IUserStatesRepository>().InstancePerLifetimeScope();
@@ -49,12 +66,6 @@ namespace Resgrid.Repositories.DataRepository
 			builder.RegisterType<DepartmentCallPruningRepository>().As<IDepartmentCallPruningRepository>().InstancePerLifetimeScope();
 			builder.RegisterType<ShiftsRepository>().As<IShiftsRepository>().InstancePerLifetimeScope();
 			builder.RegisterType<ClaimsRepository>().As<IClaimsRepository>().InstancePerLifetimeScope();
-
-			builder.RegisterType<QueryList>().As<IQueryList>().InstancePerLifetimeScope();
-			builder.RegisterType<SqlServerConfiguration>().As<SqlConfiguration>().InstancePerLifetimeScope();
-			builder.RegisterType<UnitOfWork>().As<IUnitOfWork>().InstancePerLifetimeScope();
-			builder.RegisterType<QueryFactory>().As<IQueryFactory>().InstancePerLifetimeScope();
-			builder.RegisterType<SqlServerConnectionProvider>().As<IConnectionProvider>().InstancePerLifetimeScope();
 			builder.RegisterType<IdentityRoleRepository>().As<IIdentityRoleRepository>().InstancePerLifetimeScope();
 			builder.RegisterType<IdentityUserRepository>().As<IIdentityUserRepository>().InstancePerLifetimeScope();
 			builder.RegisterType<AffiliateRepository>().As<IAffiliateRepository>().InstancePerLifetimeScope();
@@ -145,6 +156,17 @@ namespace Resgrid.Repositories.DataRepository
 			builder.RegisterType<WorkshiftEntitysRepository>().As<IWorkshiftEntitysRepository>().InstancePerLifetimeScope();
 			builder.RegisterType<WorkshiftFillsRepository>().As<IWorkshiftFillsRepository>().InstancePerLifetimeScope();
 			builder.RegisterType<WorkshiftDaysRepository>().As<IWorkshiftDaysRepository>().InstancePerLifetimeScope();
+			builder.RegisterType<CallReferencesRepository>().As<ICallReferencesRepository>().InstancePerLifetimeScope();
+			builder.RegisterType<DeleteRepository>().As<IDeleteRepository>().InstancePerLifetimeScope();
+			builder.RegisterType<DepartmentAudioRepository>().As<IDepartmentAudioRepository>().InstancePerLifetimeScope();
+			builder.RegisterType<DocumentCategoriesRepository>().As<IDocumentCategoriesRepository>().InstancePerLifetimeScope();
+			builder.RegisterType<NoteCategoriesRepository>().As<INoteCategoriesRepository>().InstancePerLifetimeScope();
+			builder.RegisterType<CallContactsRepository>().As<ICallContactsRepository>().InstancePerLifetimeScope();
+			builder.RegisterType<ContactAssociationsRepository>().As<IContactAssociationsRepository>().InstancePerLifetimeScope();
+			builder.RegisterType<ContactNoteTypesRepository>().As<IContactNoteTypesRepository>().InstancePerLifetimeScope();
+			builder.RegisterType<ContactNotesRepository>().As<IContactNotesRepository>().InstancePerLifetimeScope();
+			builder.RegisterType<ContactsRepository>().As<IContactsRepository>().InstancePerLifetimeScope();
+			builder.RegisterType<ContactCategoryRepository>().As<IContactCategoryRepository>().InstancePerLifetimeScope();
 		}
 	}
 }

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Text;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using RabbitMQ.Client;
@@ -15,9 +16,8 @@ namespace Resgrid.Providers.Bus.Rabbit
 {
 	public class RabbitInboundEventProvider : IRabbitInboundEventProvider
 	{
-		private ConnectionFactory _factory;
 		private IConnection _connection;
-		private IModel _channel;
+		private IChannel _channel;
 
 		public Func<int, string, Task> ProcessPersonnelStatusChanged;
 		public Func<int, string, Task> ProcessUnitStatusChanged;
@@ -28,119 +28,100 @@ namespace Resgrid.Providers.Bus.Rabbit
 		public Func<int, PersonnelLocationUpdatedEvent, Task> PersonnelLocationUpdated;
 		public Func<int, UnitLocationUpdatedEvent, Task> UnitLocationUpdated;
 
-		public async Task Start()
+		public async Task Start(string clientName, string queueName)
 		{
-			VerifyAndCreateClients();
-			await StartMonitoring();
+			await VerifyAndCreateClients(clientName);
+			await StartMonitoring(queueName);
 		}
 
-		private void VerifyAndCreateClients()
+		private async Task<bool> VerifyAndCreateClients(string clientName)
 		{
-			// I know....I know.....
 			try
 			{
-				_factory = new ConnectionFactory() { HostName = ServiceBusConfig.RabbitHostname, UserName = ServiceBusConfig.RabbitUsername, Password = ServiceBusConfig.RabbbitPassword };
-				_connection = _factory.CreateConnection();
-			}
-			catch (Exception ex)
-			{
-				Logging.LogException(ex);
+				_connection = await RabbitConnection.CreateConnection(clientName);
 
-				if (!String.IsNullOrWhiteSpace(ServiceBusConfig.RabbitHostname2))
+				if (_connection != null)
 				{
-					try
-					{
-						_factory = new ConnectionFactory() { HostName = ServiceBusConfig.RabbitHostname2, UserName = ServiceBusConfig.RabbitUsername, Password = ServiceBusConfig.RabbbitPassword };
-						_connection = _factory.CreateConnection();
-					}
-					catch (Exception ex2)
-					{
-						Logging.LogException(ex2);
+					_channel = await _connection.CreateChannelAsync();
 
-
-						if (!String.IsNullOrWhiteSpace(ServiceBusConfig.RabbitHostname3))
-						{
-							try
-							{
-								_factory = new ConnectionFactory() { HostName = ServiceBusConfig.RabbitHostname3, UserName = ServiceBusConfig.RabbitUsername, Password = ServiceBusConfig.RabbbitPassword };
-								_connection = _factory.CreateConnection();
-							}
-							catch (Exception ex3)
-							{
-								Logging.LogException(ex3);
-								throw;
-							}
-						}
+					if (_channel != null)
+					{
+						await _channel.ExchangeDeclareAsync(RabbitConnection.SetQueueNameForEnv(Topics.EventingTopic), "fanout");
 					}
 				}
 			}
+			catch (Exception ex)
+			{
+				Framework.Logging.LogException(ex);
+				return false;
+			}
 
-			_channel = _connection.CreateModel();
+			return true;
 		}
 
-		private async Task StartMonitoring()
+		private async Task StartMonitoring(string queueName)
 		{
-			if (SystemBehaviorConfig.ServiceBusType == ServiceBusTypes.Rabbit)
+			//var queueName = _channel.QueueDeclare().QueueName;
+
+			var queue = await _channel.QueueDeclareAsync(RabbitConnection.SetQueueNameForEnv(queueName), durable: true,
+							autoDelete: false, exclusive: false);
+
+			await _channel.QueueBindAsync(queue: queue.QueueName,
+				exchange: RabbitConnection.SetQueueNameForEnv(Topics.EventingTopic),
+				routingKey: "");
+
+			var consumer = new AsyncEventingBasicConsumer(_channel);
+			consumer.ReceivedAsync += async (model, ea) =>
 			{
-				var queueName = _channel.QueueDeclare().QueueName;
+				var body = ea.Body.ToArray();
+				var message = Encoding.UTF8.GetString(body);
 
-				_channel.QueueBind(queue: queueName,
-					exchange: SetQueueNameForEnv(Topics.EventingTopic),
-					routingKey: "");
+				var eventingMessage = JsonConvert.DeserializeObject<EventingMessage>(message);
 
-				var consumer = new EventingBasicConsumer(_channel);
-				consumer.Received += async (model, ea) =>
+				if (eventingMessage != null)
 				{
-					var body = ea.Body.ToArray();
-					var message = Encoding.UTF8.GetString(body);
-
-					var eventingMessage = JsonConvert.DeserializeObject<EventingMessage>(message);
-
-					if (eventingMessage != null)
+					switch ((EventingTypes)eventingMessage.Type)
 					{
-						switch ((EventingTypes)eventingMessage.Type)
-						{
-							case EventingTypes.PersonnelStatusUpdated:
-								if (ProcessPersonnelStatusChanged != null)
-									await ProcessPersonnelStatusChanged(eventingMessage.DepartmentId, eventingMessage.ItemId);
-								break;
-							case EventingTypes.UnitStatusUpdated:
-								if (ProcessUnitStatusChanged != null)
-									await ProcessUnitStatusChanged.Invoke(eventingMessage.DepartmentId, eventingMessage.ItemId);
-								break;
-							case EventingTypes.CallsUpdated:
-								if (ProcessCallStatusChanged != null)
-									await ProcessCallStatusChanged.Invoke(eventingMessage.DepartmentId, eventingMessage.ItemId);
-								break;
-							case EventingTypes.CallAdded:
-								if (ProcessCallStatusChanged != null)
-									await ProcessCallStatusChanged.Invoke(eventingMessage.DepartmentId, eventingMessage.ItemId);
-								break;
-							case EventingTypes.CallClosed:
-								if (ProcessCallStatusChanged != null)
-									await ProcessCallStatusChanged.Invoke(eventingMessage.DepartmentId, eventingMessage.ItemId);
-								break;
-							case EventingTypes.PersonnelStaffingUpdated:
-								if (ProcessPersonnelStaffingChanged != null)
-									await ProcessPersonnelStaffingChanged.Invoke(eventingMessage.DepartmentId, eventingMessage.ItemId);
-								break;
-							case EventingTypes.PersonnelLocationUpdated:
-								if (PersonnelLocationUpdated != null)
-									await PersonnelLocationUpdated.Invoke(eventingMessage.DepartmentId, JsonConvert.DeserializeObject<PersonnelLocationUpdatedEvent>(eventingMessage.Payload));
-								break;
-							case EventingTypes.UnitLocationUpdated:
-								if (UnitLocationUpdated != null)
-									await UnitLocationUpdated.Invoke(eventingMessage.DepartmentId, JsonConvert.DeserializeObject<UnitLocationUpdatedEvent>(eventingMessage.Payload));
-								break;
-							default:
-								throw new ArgumentOutOfRangeException();
-						}
+						case EventingTypes.PersonnelStatusUpdated:
+							if (ProcessPersonnelStatusChanged != null)
+								await ProcessPersonnelStatusChanged(eventingMessage.DepartmentId, eventingMessage.ItemId);
+							break;
+						case EventingTypes.UnitStatusUpdated:
+							if (ProcessUnitStatusChanged != null)
+								await ProcessUnitStatusChanged.Invoke(eventingMessage.DepartmentId, eventingMessage.ItemId);
+							break;
+						case EventingTypes.CallsUpdated:
+							if (ProcessCallStatusChanged != null)
+								await ProcessCallStatusChanged.Invoke(eventingMessage.DepartmentId, eventingMessage.ItemId);
+							break;
+						case EventingTypes.CallAdded:
+							if (ProcessCallAdded != null)
+								await ProcessCallAdded.Invoke(eventingMessage.DepartmentId, eventingMessage.ItemId);
+							break;
+						case EventingTypes.CallClosed:
+							if (ProcessCallClosed != null)
+								await ProcessCallClosed.Invoke(eventingMessage.DepartmentId, eventingMessage.ItemId);
+							break;
+						case EventingTypes.PersonnelStaffingUpdated:
+							if (ProcessPersonnelStaffingChanged != null)
+								await ProcessPersonnelStaffingChanged.Invoke(eventingMessage.DepartmentId, eventingMessage.ItemId);
+							break;
+						case EventingTypes.PersonnelLocationUpdated:
+							if (PersonnelLocationUpdated != null)
+								await PersonnelLocationUpdated.Invoke(eventingMessage.DepartmentId, JsonConvert.DeserializeObject<PersonnelLocationUpdatedEvent>(eventingMessage.Payload));
+							break;
+						case EventingTypes.UnitLocationUpdated:
+							if (UnitLocationUpdated != null)
+								await UnitLocationUpdated.Invoke(eventingMessage.DepartmentId, JsonConvert.DeserializeObject<UnitLocationUpdatedEvent>(eventingMessage.Payload));
+							break;
+						default:
+							throw new ArgumentOutOfRangeException();
 					}
-				};
-				_channel.BasicConsume(queue: queueName,
-					autoAck: true,
-					consumer: consumer);
-			}
+				}
+			};
+			await _channel.BasicConsumeAsync(queue: queue.QueueName,
+				autoAck: true,
+				consumer: consumer);
 		}
 
 		public bool IsConnected()
@@ -168,18 +149,6 @@ namespace Resgrid.Providers.Bus.Rabbit
 			ProcessCallClosed = callClosed;
 			PersonnelLocationUpdated = personnelLocationUpdated;
 			UnitLocationUpdated = unitLocationUpdated;
-		}
-
-		private static string SetQueueNameForEnv(string cacheKey)
-		{
-			if (Config.SystemBehaviorConfig.Environment == SystemEnvironment.Dev)
-				return $"DEV{cacheKey}";
-			else if (Config.SystemBehaviorConfig.Environment == SystemEnvironment.QA)
-				return $"QA{cacheKey}";
-			else if (Config.SystemBehaviorConfig.Environment == SystemEnvironment.Staging)
-				return $"ST{cacheKey}";
-
-			return cacheKey;
 		}
 	}
 }

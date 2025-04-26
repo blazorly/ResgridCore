@@ -11,6 +11,7 @@ namespace Resgrid.Repositories.DataRepository.Configs
 		public string TableColumnStartNotation { get; set; }
 		public string TableColumnEndNotation { get; set; }
 		public string InsertGetReturnIdCommand { get; set; }
+		public string QueryPrefix { get; set; }
 
 		#region Common
 		public string InsertQuery { get; set; }
@@ -305,7 +306,9 @@ namespace Resgrid.Repositories.DataRepository.Configs
 		public string CallAttachmentsTable { get; set; }
 		public string DepartmentCallPrioritiesTable { get; set; }
 		public string CallProtocolsTable { get; set; }
+		public string CallContactsTable { get; set; }
 		public string SelectAllCallsByDidDateQuery { get; set; }
+		public string SelectCallsCountByDidDateQuery { get; set; }
 		public string SelectAllClosedCallsByDidDateQuery { get; set; }
 		public string SelectAllCallDispatchesByGroupIdQuery { get; set; }
 		public string SelectCallAttachmentByCallIdTypeQuery { get; set; }
@@ -323,6 +326,7 @@ namespace Resgrid.Repositories.DataRepository.Configs
 		public string SelectAllClosedCallsByDidYearQuery { get; set; }
 		public string SelectNonDispatchedScheduledCallsByDateQuery { get; set; }
 		public string SelectNonDispatchedScheduledCallsByDidQuery { get; set; }
+		public string SelectCallsByContactQuery { get; set; }
 		#endregion Calls
 
 		#region Dispatch Protocols
@@ -349,6 +353,7 @@ namespace Resgrid.Repositories.DataRepository.Configs
 		public string SelectGroupByMessageCodeQuery { get; set; }
 		public string SelectGroupByGroupIdQuery { get; set; }
 		public string DeleteGroupMembersByGroupIdDidQuery { get; set; }
+		public string SelectGroupAdminsByDidQuery { get; set; }
 		#endregion Department Groups
 
 		#region Payments
@@ -411,6 +416,40 @@ namespace Resgrid.Repositories.DataRepository.Configs
 		public string SelectUnitStatesByUnitInDateRangeQuery { get; set; }
 		#endregion Unit States
 
+		#region Workshifts
+		public string WorkshiftsTable { get; set; }
+		public string WorkshiftDaysTable { get; set; }
+		public string WorkshiftEntitiesTable { get; set; }
+		public string WorkshiftFillsTable { get; set; }
+		public string SelectAllWorkshiftsAndDaysByDidQuery { get; set; }
+		public string SelectWorkshiftByIdQuery { get; set; }
+		public string SelectWorkshiftEntitiesByWorkshiftIdQuery { get; set; }
+		public string SelectWorkshiftFillsByWorkshiftIdQuery { get; set; }
+		#endregion Workshifts
+
+		#region CallReferences
+		public string CallReferencesTable { get; set; }
+		public string SelectAllCallReferencesBySourceCallIdQuery { get; set; }
+		public string SelectAllCallReferencesByTargetCallIdQuery { get; set; }
+		#endregion CallReferences
+
+		#region Scheduled Tasks
+		public string ScheduledTasksTable { get; set; }
+		public string SelectAllUpcomingOrRecurringReportTasksQuery { get; set; }
+		#endregion Scheduled Tasks
+
+		#region Contacts
+		public string ContactsTableName { get; set; }
+		public string ContactAssociationsTableName { get; set; }
+		public string ContactCategoriesTableName { get; set; }
+		public string ContactNotesTableName { get; set; }
+		public string ContactNoteTypesTableName { get; set; }
+		public string CallContactTableName { get; set; }
+		public string SelectContactsByCategoryIdQuery { get; set; }
+		public string SelectContactNotesByContactIdQuery { get; set; }
+		public string SelectAllCallContactsByCallIdQuery { get; set; }
+		#endregion Contacts
+
 		// Identity
 
 		#region Table Names
@@ -455,16 +494,5 @@ namespace Resgrid.Repositories.DataRepository.Configs
 		public string RemoveLoginForUserQuery { get; set; }
 		public string UpdateClaimForUserQuery { get; set; }
 		#endregion
-
-		#region Workshifts
-		public string WorkshiftsTable { get; set; }
-		public string WorkshiftDaysTable { get; set; }
-		public string WorkshiftEntitiesTable { get; set; }
-		public string WorkshiftFillsTable { get; set; }
-		public string SelectAllWorkshiftsAndDaysByDidQuery { get; set; }
-		public string SelectWorkshiftByIdQuery { get; set; }
-		public string SelectWorkshiftEntitiesByWorkshiftIdQuery { get; set; }
-		public string SelectWorkshiftFillsByWorkshiftIdQuery { get; set; }
-		#endregion Workshifts
 	}
 }

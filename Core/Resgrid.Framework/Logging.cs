@@ -3,13 +3,12 @@ using Sentry;
 using Serilog;
 using Serilog.Core;
 using Serilog.Events;
-using Serilog.Sinks.Elasticsearch;
 using System;
-using System.Diagnostics;
 using System.Net;
 using System.Net.Mail;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
 
 namespace Resgrid.Framework
 {
@@ -21,11 +20,11 @@ namespace Resgrid.Framework
 
 		public static void Initialize(string key)
 		{
-			if (_isInitialized == false)
+			if (!_isInitialized)
 			{
 				if (SystemBehaviorConfig.ErrorLoggerType == ErrorLoggerTypes.Sentry)
 				{
-					string dsn = ExternalErrorConfig.ExternalErrorServiceUrl;
+					string dsn = ExternalErrorConfig.ExternalErrorServiceUrlForApi;
 					if (!String.IsNullOrWhiteSpace(key))
 						dsn = key;
 
@@ -37,20 +36,17 @@ namespace Resgrid.Framework
 												o.MinimumBreadcrumbLevel = LogEventLevel.Debug;
 												o.MinimumEventLevel = LogEventLevel.Error;
 												o.Dsn = dsn;
-												o.AttachStacktrace = true;
-												o.SendDefaultPii = true;
 												o.Environment = ExternalErrorConfig.Environment;
 												o.Release = Assembly.GetEntryAssembly().GetName().Version.ToString();
 											}).CreateLogger();
 				}
-				else if (SystemBehaviorConfig.ErrorLoggerType == ErrorLoggerTypes.Elk)
+				else
 				{
 					_logger = new LoggerConfiguration()
-										.WriteTo.Elasticsearch(new ElasticsearchSinkOptions(new Uri(ExternalErrorConfig.ElkServiceUrl))
-										{
-											AutoRegisterTemplate = true,
-											AutoRegisterTemplateVersion = AutoRegisterTemplateVersion.ESv6
-										}).CreateLogger();
+											.Enrich.FromLogContext()
+											.MinimumLevel.Debug()
+											.WriteTo.Console()
+											.CreateLogger();
 				}
 
 				_isInitialized = true;

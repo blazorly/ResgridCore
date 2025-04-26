@@ -65,10 +65,7 @@ namespace Resgrid.Providers.EmailProvider
 			{
 				if (SystemBehaviorConfig.OutboundEmailType == OutboundEmailTypes.Postmark)
 				{
-					if (mail.From != null && mail.From.Address.Contains("resgrid.com") && mail.From.Address != "systemlist@resgrid.com" &&
-							mail.From.Address != "systemcheck@resgrid.com" && mail.From.Address != "systemcheck2@resgrid.com" &&
-							email.To.First() != "systemlist@resgrid.com" &&
-							email.To.First() != "systemcheck@resgrid.com" && email.To.First() != "systemcheck2@resgrid.com")
+					if (mail.From != null && !String.IsNullOrWhiteSpace(mail.From.Address))
 					{
 						var to = new StringBuilder();
 						foreach (var t in email.To)
@@ -79,11 +76,15 @@ namespace Resgrid.Providers.EmailProvider
 								to.Append("," + t);
 						}
 
-						var message = new PostmarkMessage("", to.ToString(), email.Subject, StringHelpers.StripHtmlTagsCharArray(email.HtmlBody), email.HtmlBody);
+						var message = new PostmarkMessage(email.From, to.ToString(), email.Subject, StringHelpers.StripHtmlTagsCharArray(email.HtmlBody), email.HtmlBody);
 						var newClient = new PostmarkClient(Config.OutboundEmailServerConfig.PostmarkApiKey);
 
-						message.From = null;
-						var response = await newClient.SendMessageAsync(email.From, to.ToString(), email.Subject, StringHelpers.StripHtmlTagsCharArray(email.HtmlBody), email.HtmlBody);
+						if (!String.IsNullOrWhiteSpace(email.AttachmentName) && email.AttachmentData.Length > 0)
+						{
+							message.AddAttachment(email.AttachmentData, email.AttachmentName, email.AttachmentContentType);
+						}
+
+						var response = await newClient.SendMessageAsync(message);
 
 						if (response.ErrorCode != 200 && response.ErrorCode != 406 && response.Message != "OK" &&
 						    !response.Message.Contains(

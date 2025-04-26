@@ -30,36 +30,6 @@ namespace Resgrid.Workers.Framework.Logic
 				{
 					case CqrsEventTypes.None:
 						break;
-					//case CqrsEventTypes.UnitLocation:
-					//	UnitLocation unitLocation = null;
-					//	try
-					//	{
-					//		unitLocation = ObjectSerialization.Deserialize<UnitLocation>(qi.Data);
-					//	}
-					//	catch (Exception ex)
-					//	{
-
-					//	}
-
-					//	if (unitLocation != null)
-					//	{
-					//		IUnitsService unitService;
-					//		try
-					//		{
-					//			unitService = Bootstrapper.GetKernel().Resolve<IUnitsService>();
-					//			var unit = await unitService.GetUnitByIdAsync(unitLocation.UnitId);
-					//			await unitService.AddUnitLocationAsync(unitLocation, unit.DepartmentId, cancellationToken);
-					//		}
-					//		catch (Exception ex)
-					//		{
-
-					//		}
-					//		finally
-					//		{
-					//			unitService = null;
-					//		}
-					//	}
-					//	break;
 					case CqrsEventTypes.PushRegistration:
 
 						PushUri data = null;
@@ -109,56 +79,6 @@ namespace Resgrid.Workers.Framework.Logic
 						catch (Exception ex)
 						{
 
-						}
-						break;
-					case CqrsEventTypes.StripeChargeSucceeded:
-						var succeededCharge = JsonConvert.DeserializeObject<Charge>(qi.Data);
-
-						if (succeededCharge != null)
-						{
-							var paymentProviderService = Bootstrapper.GetKernel().Resolve<IPaymentProviderService>();
-
-							await paymentProviderService.ProcessStripePaymentAsync(succeededCharge);
-						}
-						break;
-					case CqrsEventTypes.StripeChargeFailed:
-						var failedCharge = JsonConvert.DeserializeObject<Charge>(qi.Data);
-
-						if (failedCharge != null)
-						{
-							var paymentProviderService = Bootstrapper.GetKernel().Resolve<IPaymentProviderService>();
-
-							await paymentProviderService.ProcessStripeChargeFailedAsync(failedCharge);
-						}
-						break;
-					case CqrsEventTypes.StripeChargeRefunded:
-						var refundedCharge = JsonConvert.DeserializeObject<Charge>(qi.Data);
-
-						if (refundedCharge != null)
-						{
-							var paymentProviderService = Bootstrapper.GetKernel().Resolve<IPaymentProviderService>();
-
-							await paymentProviderService.ProcessStripeSubscriptionRefundAsync(refundedCharge);
-						}
-						break;
-					case CqrsEventTypes.StripeSubUpdated:
-						var updatedSubscription = JsonConvert.DeserializeObject<Subscription>(qi.Data);
-
-						if (updatedSubscription != null)
-						{
-							var paymentProviderService = Bootstrapper.GetKernel().Resolve<IPaymentProviderService>();
-
-							await paymentProviderService.ProcessStripeSubscriptionUpdateAsync(updatedSubscription);
-						}
-						break;
-					case CqrsEventTypes.StripeSubDeleted:
-						var deletedSubscription = JsonConvert.DeserializeObject<Subscription>(qi.Data);
-
-						if (deletedSubscription != null)
-						{
-							var paymentProviderService = Bootstrapper.GetKernel().Resolve<IPaymentProviderService>();
-
-							await paymentProviderService.ProcessStripeSubscriptionCancellationAsync(deletedSubscription);
 						}
 						break;
 					case CqrsEventTypes.ClearDepartmentCache:
@@ -233,7 +153,7 @@ namespace Resgrid.Workers.Framework.Logic
 
 									var sendingUserProfile = await userProfileService.GetProfileByUserIdAsync(newChatEvent.SendingUserId);
 
-									var chatResult = await communicationService.SendChat(newChatEvent.Id, newChatEvent.SendingUserId, newChatEvent.GroupName, newChatEvent.Message, sendingUserProfile, profiles);
+									var chatResult = await communicationService.SendChat(newChatEvent.Id, newChatEvent.DepartmentId, newChatEvent.SendingUserId, newChatEvent.GroupName, newChatEvent.Message, sendingUserProfile, profiles);
 								}
 
 								userProfileService = null;
@@ -482,26 +402,6 @@ namespace Resgrid.Workers.Framework.Logic
 								auditLog.LoggedOn = DateTime.UtcNow;
 								await auditLogsRepository.SaveOrUpdateAsync(auditLog, cancellationToken);
 							}
-						}
-						break;
-					case CqrsEventTypes.StripeCheckoutCompleted:
-						var stripeCheckoutSession = JsonConvert.DeserializeObject<Session>(qi.Data);
-
-						if (stripeCheckoutSession != null)
-						{
-							var paymentProviderService = Bootstrapper.GetKernel().Resolve<IPaymentProviderService>();
-
-							await paymentProviderService.ProcessStripeCheckoutCompletedAsync(stripeCheckoutSession, cancellationToken);
-						}
-						break;
-					case CqrsEventTypes.StripeCheckoutUpdated:
-						var stripeCheckoutSessionUpdated = JsonConvert.DeserializeObject<Session>(qi.Data);
-
-						if (stripeCheckoutSessionUpdated != null)
-						{
-							var paymentProviderService = Bootstrapper.GetKernel().Resolve<IPaymentProviderService>();
-
-							await paymentProviderService.ProcessStripeCheckoutUpdateAsync(stripeCheckoutSessionUpdated, cancellationToken);
 						}
 						break;
 					default:

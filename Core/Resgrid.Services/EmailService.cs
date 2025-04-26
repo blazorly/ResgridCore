@@ -32,7 +32,7 @@ namespace Resgrid.Services
 
 		private SmtpClient _smtpClient;
 
-		public EmailService(IUserProfileService userProfileService, IUsersService usersService, IGeoLocationProvider geoLocationProvider, IEmailProvider emailProvider, 
+		public EmailService(IUserProfileService userProfileService, IUsersService usersService, IGeoLocationProvider geoLocationProvider, IEmailProvider emailProvider,
 			IDepartmentsService departmentsService, ICallEmailProvider callEmailProvider, IEmailSender emailSender, IAmazonEmailSender amazonEmailSender)
 		{
 			_userProfileService = userProfileService;
@@ -136,7 +136,7 @@ namespace Resgrid.Services
 		{
 			if (Config.SystemBehaviorConfig.DoNotBroadcast && !Config.SystemBehaviorConfig.BypassDoNotBroadcastDepartments.Contains(departmentId))
 				return false;
-			
+
 			if (profile == null && !String.IsNullOrWhiteSpace(message.ReceivingUserId))
 				profile = await _userProfileService.GetProfileByUserIdAsync(message.ReceivingUserId);
 
@@ -184,7 +184,7 @@ namespace Resgrid.Services
 
 			string subject = string.Empty;
 			string priority = string.Empty;
-			string address = string.Empty;
+			string address = "No Address Supplied";
 
 			if (call.IsCritical)
 			{
@@ -199,9 +199,12 @@ namespace Resgrid.Services
 
 			string coordinates = "No Coordinates Supplied";
 			if (!string.IsNullOrEmpty(call.GeoLocationData) && call.GeoLocationData.Length > 1)
-			{
 				coordinates = call.GeoLocationData;
 
+			if (!string.IsNullOrEmpty(call.Address))
+				address = call.Address;
+			else if (!string.IsNullOrEmpty(call.GeoLocationData) && call.GeoLocationData.Length > 1)
+			{
 				string[] points = call.GeoLocationData.Split(char.Parse(","));
 
 				if (points != null && points.Length == 2)
@@ -216,15 +219,10 @@ namespace Resgrid.Services
 				}
 			}
 
-			if (!string.IsNullOrEmpty(call.Address) && string.IsNullOrWhiteSpace(address))
-				address = call.Address;
-			else
-				address = "No Address Supplied";
-
 			string dispatchedOn = String.Empty;
 
 			if (call.Department != null)
-				dispatchedOn = call.LoggedOn.FormatForDepartment(call.Department);
+				dispatchedOn = call.LoggedOn.TimeConverterToString(call.Department);
 			else
 				dispatchedOn = call.LoggedOn.ToString("G") + " UTC";
 
@@ -301,7 +299,7 @@ namespace Resgrid.Services
 		{
 			if (Config.SystemBehaviorConfig.DoNotBroadcast && !Config.SystemBehaviorConfig.BypassDoNotBroadcastDepartments.Contains(invite.DepartmentId))
 				return false;
-			
+
 			if (invite == null)
 				return false;
 
@@ -313,8 +311,56 @@ namespace Resgrid.Services
 			return true;
 		}
 
+		public async Task<bool> SendReportDeliveryAsync(EmailNotification email, int departmentId, string reportUrl, string reportName)
+		{
+			if (Config.SystemBehaviorConfig.DoNotBroadcast && !Config.SystemBehaviorConfig.BypassDoNotBroadcastDepartments.Contains(departmentId))
+				return false;
+
+			var body = string.Format("Your scheduled Resgrid report is attached. It will be as an email attachment. You can view the live report by clicking the link in the email and logging in.");
+
+			return await _emailProvider.SendReportDeliveryMail(email.To, email.Subject, body, DateTime.UtcNow.ToString("G") + " UTC", reportName, email.AttachmentName, email.AttachmentData, reportUrl);
+		}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 		public async Task<bool> SendDistributionListEmail(MimeMessage message, string emailAddress, string name, string listUsername, string listEmail)
-		{			
+		{
 			// VERP https://www.limilabs.com/blog/verp-variable-envelope-return-path-net
 
 			message.From.Clear();
@@ -334,7 +380,7 @@ namespace Resgrid.Services
 		{
 			if (Config.SystemBehaviorConfig.DoNotBroadcast && !Config.SystemBehaviorConfig.BypassDoNotBroadcastDepartments.Contains(department.DepartmentId))
 				return false;
-			
+
 			IdentityUser user;
 
 			if (department.ManagingUser != null)
@@ -355,7 +401,7 @@ namespace Resgrid.Services
 		{
 			if (Config.SystemBehaviorConfig.DoNotBroadcast && !Config.SystemBehaviorConfig.BypassDoNotBroadcastDepartments.Contains(department.DepartmentId))
 				return false;
-			
+
 			if (department == null && payment != null && payment.Department != null)
 				department = payment.Department;
 
@@ -381,7 +427,7 @@ namespace Resgrid.Services
 		{
 			if (Config.SystemBehaviorConfig.DoNotBroadcast && !Config.SystemBehaviorConfig.BypassDoNotBroadcastDepartments.Contains(department.DepartmentId))
 				return false;
-			
+
 			if (payment != null && department != null)
 			{
 				var user = _usersService.GetUserById(department.ManagingUserId, false);
@@ -404,7 +450,7 @@ namespace Resgrid.Services
 		{
 			if (Config.SystemBehaviorConfig.DoNotBroadcast && !Config.SystemBehaviorConfig.BypassDoNotBroadcastDepartments.Contains(department.DepartmentId))
 				return false;
-			
+
 			var user = _usersService.GetUserById(department.ManagingUserId, false);
 			var profile = await _userProfileService.GetProfileByUserIdAsync(user.UserId);
 
@@ -418,7 +464,7 @@ namespace Resgrid.Services
 		{
 			if (Config.SystemBehaviorConfig.DoNotBroadcast && !Config.SystemBehaviorConfig.BypassDoNotBroadcastDepartments.Contains(department.DepartmentId))
 				return false;
-			
+
 			var user = _usersService.GetUserById(department.ManagingUserId, false);
 			var profile = await _userProfileService.GetProfileByUserIdAsync(user.UserId);
 
@@ -438,7 +484,7 @@ namespace Resgrid.Services
 		{
 			if (Config.SystemBehaviorConfig.DoNotBroadcast && !Config.SystemBehaviorConfig.BypassDoNotBroadcastDepartments.Contains(department.DepartmentId))
 				return false;
-			
+
 			await _emailProvider.TEAM_SendNotifyRefundIssued(department.DepartmentId.ToString(), department.Name, DateTime.UtcNow.ToShortDateString() + " " + DateTime.UtcNow.ToShortTimeString(),
 													(float.Parse(charge.AmountRefunded.ToString()) / 100f).ToString("C", Cultures.UnitedStates), ((PaymentMethods)payment.Method).ToString(), charge.Id, payment.PaymentId.ToString());
 
@@ -576,6 +622,23 @@ namespace Resgrid.Services
 			var managingProfile = await _userProfileService.GetProfileByUserIdAsync(targetDepartment.ManagingUserId);
 
 			await _emailProvider.SendNewDepartmentLinkMail(managingProfile.FullName.AsFirstNameLastName, sourceDepartment.Name, "", managingProfile.User.Email, targetDepartment.DepartmentId);
+
+			return false;
+		}
+
+		public async Task<bool> SendDeleteDepartmentEmail(string sendingToEmail, string sendingToName, QueueItem queueItem)
+		{
+			if (queueItem == null)
+				return false;
+
+			if (Config.SystemBehaviorConfig.DoNotBroadcast && !Config.SystemBehaviorConfig.BypassDoNotBroadcastDepartments.Contains(int.Parse(queueItem.SourceId)))
+				return false;
+
+			var department = await _departmentsService.GetDepartmentByIdAsync(int.Parse(queueItem.SourceId));
+			var userProfile = await _userProfileService.GetProfileByUserIdAsync(queueItem.QueuedByUserId);
+
+			if (queueItem.ToBeCompletedOn.HasValue)
+				return await _emailProvider.SendDeleteDepartmentEmail(userProfile.FullName.AsFirstNameLastName, department.Name, queueItem.ToBeCompletedOn.Value.TimeConverter(department), sendingToName, sendingToEmail);
 
 			return false;
 		}

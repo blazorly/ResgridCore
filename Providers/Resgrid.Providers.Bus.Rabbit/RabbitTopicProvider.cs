@@ -7,19 +7,17 @@ using Resgrid.Model.Events;
 using System;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace Resgrid.Providers.Bus.Rabbit
 {
 	public class RabbitTopicProvider
 	{
-		public RabbitTopicProvider()
-		{
-			VerifyAndCreateClients();
-		}
+		private readonly string _clientName = "Resgrid-Topic";
 
-		public bool PersonnelStatusChanged(UserStatusEvent message)
+		public async Task<bool> PersonnelStatusChanged(UserStatusEvent message)
 		{
-			return SendMessage(Topics.EventingTopic, new EventingMessage
+			return await SendMessage(Topics.EventingTopic, new EventingMessage
 			{
 				Id = Guid.NewGuid(),
 				Type = (int)EventingTypes.PersonnelStatusUpdated,
@@ -29,9 +27,9 @@ namespace Resgrid.Providers.Bus.Rabbit
 			}.SerializeJson());
 		}
 
-		public bool PersonnelStaffingChanged(UserStaffingEvent message)
+		public async Task<bool> PersonnelStaffingChanged(UserStaffingEvent message)
 		{
-			return SendMessage(Topics.EventingTopic, new EventingMessage
+			return await SendMessage(Topics.EventingTopic, new EventingMessage
 			{
 				Id = Guid.NewGuid(),
 				Type = (int)EventingTypes.PersonnelStaffingUpdated,
@@ -41,9 +39,9 @@ namespace Resgrid.Providers.Bus.Rabbit
 			}.SerializeJson());
 		}
 
-		public bool UnitStatusChanged(UnitStatusEvent message)
+		public async Task<bool> UnitStatusChanged(UnitStatusEvent message)
 		{
-			return SendMessage(Topics.EventingTopic, new EventingMessage
+			return await SendMessage(Topics.EventingTopic, new EventingMessage
 			{
 				Id = Guid.NewGuid(),
 				Type = (int)EventingTypes.UnitStatusUpdated,
@@ -53,9 +51,9 @@ namespace Resgrid.Providers.Bus.Rabbit
 			}.SerializeJson());
 		}
 
-		public bool CallAdded(CallAddedEvent message)
+		public async Task<bool> CallAdded(CallAddedEvent message)
 		{
-			return SendMessage(Topics.EventingTopic, new EventingMessage
+			return await SendMessage(Topics.EventingTopic, new EventingMessage
 			{
 				Id = Guid.NewGuid(),
 				Type = (int)EventingTypes.CallAdded,
@@ -65,9 +63,9 @@ namespace Resgrid.Providers.Bus.Rabbit
 			}.SerializeJson());
 		}
 
-		public bool CallUpdated(CallUpdatedEvent message)
+		public async Task<bool> CallUpdated(CallUpdatedEvent message)
 		{
-			return SendMessage(Topics.EventingTopic, new EventingMessage
+			return await SendMessage(Topics.EventingTopic, new EventingMessage
 			{
 				Id = Guid.NewGuid(),
 				Type = (int)EventingTypes.CallsUpdated,
@@ -77,9 +75,9 @@ namespace Resgrid.Providers.Bus.Rabbit
 			}.SerializeJson());
 		}
 
-		public bool CallClosed(CallClosedEvent message)
+		public async Task<bool> CallClosed(CallClosedEvent message)
 		{
-			return SendMessage(Topics.EventingTopic, new EventingMessage
+			return await SendMessage(Topics.EventingTopic, new EventingMessage
 			{
 				Id = Guid.NewGuid(),
 				Type = (int)EventingTypes.CallClosed,
@@ -89,9 +87,9 @@ namespace Resgrid.Providers.Bus.Rabbit
 			}.SerializeJson());
 		}
 
-		public bool PersonnelLocationUnidatedChanged(PersonnelLocationUpdatedEvent message)
+		public async Task<bool> PersonnelLocationUnidatedChanged(PersonnelLocationUpdatedEvent message)
 		{
-			return SendMessage(Topics.EventingTopic, new EventingMessage
+			return await SendMessage(Topics.EventingTopic, new EventingMessage
 			{
 				Id = Guid.NewGuid(),
 				Type = (int)EventingTypes.PersonnelLocationUpdated,
@@ -102,9 +100,9 @@ namespace Resgrid.Providers.Bus.Rabbit
 			}.SerializeJson());
 		}
 
-		public bool UnitLocationUpdatedChanged(UnitLocationUpdatedEvent message)
+		public async Task<bool> UnitLocationUpdatedChanged(UnitLocationUpdatedEvent message)
 		{
-			return SendMessage(Topics.EventingTopic, new EventingMessage
+			return await SendMessage(Topics.EventingTopic, new EventingMessage
 			{
 				Id = Guid.NewGuid(),
 				Type = (int)EventingTypes.UnitLocationUpdated,
@@ -115,44 +113,44 @@ namespace Resgrid.Providers.Bus.Rabbit
 			}.SerializeJson());
 		}
 
-		private static void VerifyAndCreateClients()
-		{
-			if (SystemBehaviorConfig.ServiceBusType == ServiceBusTypes.Rabbit)
-			{
-				try
-				{
-					//var factory = new ConnectionFactory() { HostName = ServiceBusConfig.RabbitHostname, UserName = ServiceBusConfig.RabbitUsername, Password = ServiceBusConfig.RabbbitPassword };
-					//using (var connection = factory.CreateConnection())
-					var connection = RabbitConnection.CreateConnection();
-
-					if (connection != null)
-					{
-						using (var channel = connection.CreateModel())
-						{
-							channel.ExchangeDeclare(SetQueueNameForEnv(Topics.EventingTopic), "fanout");
-						}
-					}
-				}
-				catch (Exception ex)
-				{
-					Framework.Logging.LogException(ex);
-				}
-			}
-		}
-
-		private bool SendMessage(string topicName, string message)
+		private static async Task<bool> VerifyAndCreateClients(string clientName)
 		{
 			try
 			{
-				//using (var connection = RabbitConnection.CreateConnection())
-				var connection = RabbitConnection.CreateConnection();
+				var connection = await RabbitConnection.CreateConnection(clientName);
+
 				if (connection != null)
 				{
-					using (var channel = connection.CreateModel())
+					using (var channel = await connection.CreateChannelAsync())
 					{
-						channel.BasicPublish(exchange: SetQueueNameForEnv(topicName),
+						await channel.ExchangeDeclareAsync(RabbitConnection.SetQueueNameForEnv(Topics.EventingTopic), "fanout");
+					}
+				}
+			}
+			catch (Exception ex)
+			{
+				Framework.Logging.LogException(ex);
+				return false;
+			}
+
+			return true;
+		}
+
+		private async Task<bool> SendMessage(string topicName, string message)
+		{
+			await VerifyAndCreateClients(_clientName);
+
+			try
+			{
+				var connection = await RabbitConnection.CreateConnection(_clientName);
+				if (connection != null)
+				{
+					using (var channel = await connection.CreateChannelAsync())
+					{
+						await channel.BasicPublishAsync(exchange: RabbitConnection.SetQueueNameForEnv(topicName),
 									 routingKey: "",
-									 basicProperties: null,
+									 //mandatory: false, //TODO: Not sure here. -SJ
+									 //basicProperties: null,
 									 body: Encoding.ASCII.GetBytes(message));
 					}
 				}
@@ -165,18 +163,6 @@ namespace Resgrid.Providers.Bus.Rabbit
 			}
 
 			return false;
-		}
-
-		private static string SetQueueNameForEnv(string cacheKey)
-		{
-			if (Config.SystemBehaviorConfig.Environment == SystemEnvironment.Dev)
-				return $"DEV{cacheKey}";
-			else if (Config.SystemBehaviorConfig.Environment == SystemEnvironment.QA)
-				return $"QA{cacheKey}";
-			else if (Config.SystemBehaviorConfig.Environment == SystemEnvironment.Staging)
-				return $"ST{cacheKey}";
-
-			return cacheKey;
 		}
 	}
 }

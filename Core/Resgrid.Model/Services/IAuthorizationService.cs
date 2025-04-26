@@ -272,5 +272,59 @@ namespace Resgrid.Model.Services
 		Task<bool> CanUserCloseCallAsync(string userId, int callId, int departmentId);
 
 		Task<bool> CanUserAddCallDataAsync(string userId, int callId, int departmentId);
+
+		Task<bool> CanUserDeleteDepartmentAsync(string userId, int departmentId);
+
+		Task<bool> CanUserModifyCustomStatusAsync(string userId, int customStatusId);
+
+		Task<bool> CanUserModifyCustomStateDetailAsync(string userId, int customStateDetailId);
+
+		Task<bool> CanUserModifyCallTypeAsync(string userId, int callTypeId);
+
+		Task<bool> CanUserAddCallTypeAsync(string userId);
+
+		Task<bool> CanUserAddCallPriorityAsync(string userId);
+
+		Task<bool> CanUserDeleteCallPriorityAsync(string userId, int priorityId);
+
+		Task<bool> CanUserEditCallPriorityAsync(string userId, int priorityId);
+
+		Task<bool> CanUserAddUnitTypeAsync(string userId);
+
+		Task<bool> CanUserEditUnitTypeAsync(string userId, int unitTypeId);
+
+		Task<bool> CanUserAddCertificationTypeAsync(string userId);
+
+		Task<bool> CanUserAddDocumentTypeAsync(string userId);
+
+		Task<bool> CanUserDeleteCertificationTypeAsync(string userId, int certificationTypeId);
+
+		Task<bool> CanUserDeleteDocumentTypeAsync(string userId, string documentTypeId);
+
+		Task<bool> CanUserAddNoteTypeAsync(string userId);
+
+		Task<bool> CanUserDeleteNoteTypeAsync(string userId, string noteTypeId);
+
+		Task<bool> CanUserAddNoteAsync(string userId);
+
+		Task<bool> CanUserEditNoteAsync(string userId, int noteId);
+
+		Task<bool> CanUserViewPersonViaMatrixAsync(string userToView, string userId, int departmentId);
+
+		Task<bool> CanUserViewPersonLocationViaMatrixAsync(string userToView, string userId, int departmentId);
+
+		Task<bool> CanUserViewUnitViaMatrixAsync(int unitToView, string userId, int departmentId);
+
+		Task<bool> CanUserViewUnitLocationViaMatrixAsync(int unitToView, string userId, int departmentId);
+
+		Task<bool> CanUserViewAllPeopleAsync(string userId, int departmentId);
+
+		Task<bool> CanUserDeleteContactNoteTypeAsync(string userId, string contactNoteTypeId);
+
+		Task<bool> CanUserEditContactNoteTypeAsync(string userId, string contactNoteTypeId);
+
+		Task<bool> CanUserDeleteContactAsync(string userId, int departmentId);
+
+		Task<bool> CanUserAddOrEditContactAsync(string userId, int departmentId);
 	}
 }

@@ -35,7 +35,6 @@ using Resgrid.Providers.PdfProvider;
 using Resgrid.Repositories.DataRepository;
 using Resgrid.Services;
 using Resgrid.Web.Eventing.Hubs;
-using Resgrid.Web.Eventing.Services;
 using System.Security.Claims;
 using OpenIddict.Validation;
 using static OpenIddict.Abstractions.OpenIddictConstants;
@@ -48,6 +47,9 @@ using Microsoft.IdentityModel.Logging;
 using OpenIddict.Validation;
 using Microsoft.IdentityModel.Tokens;
 using Org.BouncyCastle.Asn1.Ess;
+using IPNetwork = Microsoft.AspNetCore.HttpOverrides.IPNetwork;
+using System.Net.Http;
+using Resgrid.Providers.Messaging;
 
 namespace Resgrid.Web.Eventing
 {
@@ -74,11 +76,9 @@ namespace Resgrid.Web.Eventing
 		public void ConfigureServices(IServiceCollection services)
 		{
 			IdentityModelEventSource.ShowPII = true;
-			
+
 			bool configResult = ConfigProcessor.LoadAndProcessConfig(Configuration["AppOptions:ConfigPath"]);
 			bool envConfigResult = ConfigProcessor.LoadAndProcessEnvVariables(Configuration.AsEnumerable());
-
-			Framework.Logging.Initialize(ExternalErrorConfig.ExternalErrorServiceUrl);
 
 			var settings = System.Configuration.ConfigurationManager.ConnectionStrings;
 			var element = typeof(ConfigurationElement).GetField("_readOnly", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -96,6 +96,29 @@ namespace Resgrid.Web.Eventing
 
 			collection.SetValue(settings, true);
 			element.SetValue(settings, true);
+
+			Framework.Logging.Initialize(ExternalErrorConfig.ExternalErrorServiceUrlForEventing);
+
+			if (Config.ApiConfig.BypassSslChecks)
+			{
+				services.AddHttpClient("ByPassSSLHttpClient")
+					 .ConfigurePrimaryHttpMessageHandler(() =>
+					 {
+						 var handler = new HttpClientHandler
+						 {
+							 AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
+							 ServerCertificateCustomValidationCallback = (sender, certificate, chain, errors) =>
+							 {
+								 return true;
+							 }
+						 };
+						 return handler;
+					 });
+			}
+			else
+			{
+				services.AddHttpClient("ByPassSSLHttpClient");
+			}
 
 			services.AddCors();
 
@@ -262,10 +285,10 @@ namespace Resgrid.Web.Eventing
 				options.RequireHttpsMetadata = false;
 				options.Audience = JwtConfig.Audience;
 				options.TokenValidationParameters = tokenValidationParameters;
-				
+
 				// We have to hook the OnMessageReceived event in order to
 				// allow the JWT authentication handler to read the access
-				// token from the query string when a WebSocket or 
+				// token from the query string when a WebSocket or
 				// Server-Sent Events request comes in.
 
 				// Sending the access token in the query string is required due to
@@ -294,7 +317,7 @@ namespace Resgrid.Web.Eventing
 				};
 			});
 
-			services.AddHostedService<Worker>();
+			//services.AddHostedService<Worker>();
 		}
 
 		public void ConfigureContainer(ContainerBuilder builder)
@@ -315,6 +338,7 @@ namespace Resgrid.Web.Eventing
 			builder.RegisterModule(new MarketingModule());
 			builder.RegisterModule(new PdfProviderModule());
 			builder.RegisterModule(new FirebaseProviderModule());
+			builder.RegisterModule(new MessagingProviderModule());
 
 			builder.RegisterType<IdentityUserStore>().As<IUserStore<Model.Identity.IdentityUser>>().InstancePerLifetimeScope();
 			builder.RegisterType<IdentityRoleStore>().As<IRoleStore<Model.Identity.IdentityRole>>().InstancePerLifetimeScope();
@@ -342,7 +366,6 @@ namespace Resgrid.Web.Eventing
 			var eventAggregator = this.AutofacContainer.Resolve<IEventAggregator>();
 			var outbound = this.AutofacContainer.Resolve<IOutboundEventProvider>();
 			var eventService = this.AutofacContainer.Resolve<ICoreEventService>();
-			//var eventingHubService = this.AutofacContainer.Resolve<EventingHubService>();
 
 			this.Locator = new AutofacServiceLocator(this.AutofacContainer);
 			ServiceLocator.SetLocatorProvider(() => this.Locator);

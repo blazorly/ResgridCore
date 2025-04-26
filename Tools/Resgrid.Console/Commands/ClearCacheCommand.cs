@@ -1,61 +1,82 @@
-using Resgrid.Console.Args;
 using System;
-using Consolas2.Core;
+using System.Threading;
+using System.Threading.Tasks;
 using Resgrid.Model.Services;
-using Resgrid.Workers.Framework;
-using Autofac;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using Resgrid.Console.Models;
 
 namespace Resgrid.Console.Commands
 {
-	public class ClearCacheCommand : Command
+	public sealed class ClearCacheCommand(
+		IConfiguration configuration,
+		ILogger<ClearCacheCommand> logger,
+		ICallsService callsService,
+		IUserProfileService userProfileService,
+		ICommunicationService communicationService,
+		IMessageService messageService,
+		IDepartmentSettingsService departmentSettingsService,
+		IQueueService queueService,
+		IPushService pushService,
+		ISubscriptionsService subscriptionsService,
+		IScheduledTasksService scheduledTasksService,
+		IDepartmentsService departmentsService,
+		IActionLogsService actionLogsService,
+		ICustomStateService customStateService,
+		IUsersService usersService) : ICommandService
 	{
-		private readonly IConsole _console;
+		private int DepartmentId => int.Parse(GetConfigurationValue("DepartmentId"));
 
-		public ClearCacheCommand(IConsole console)
+		/// <summary>
+		///     Executes the main functionality of the application.
+		/// </summary>
+		/// <param name="args">An array of command-line arguments passed to the application.</param>
+		/// <param name="cancellationToken">A token that can be used to signal the operation should be canceled.</param>
+		/// <returns>Returns an <see cref="ExitCode" /> indicating the result of the execution.</returns>
+		public async Task<ExitCode> ExecuteMainAsync(string[] args, CancellationToken cancellationToken)
 		{
-			_console = console;
-		}
-
-		public string Execute(ClearCacheArgs args)
-		{
-			_console.WriteLine("Clearing Cache for Department Id " + args.DepartmentId);
-			_console.WriteLine("Please Wait...");
+			logger.LogInformation("Clearing Cache for Department Id " + DepartmentId);
+			logger.LogInformation("Please Wait...");
 
 			try
 			{
-				var callsService = Bootstrapper.GetKernel().Resolve<ICallsService>();
-				var userProfileService = Bootstrapper.GetKernel().Resolve<IUserProfileService>();
-				var communicationService = Bootstrapper.GetKernel().Resolve<ICommunicationService>();
-				var messageService = Bootstrapper.GetKernel().Resolve<IMessageService>();
-				var departmentSettingsService = Bootstrapper.GetKernel().Resolve<IDepartmentSettingsService>();
-				var queueService = Bootstrapper.GetKernel().Resolve<IQueueService>();
-				var pushService = Bootstrapper.GetKernel().Resolve<IPushService>();
-				var subscriptionService = Bootstrapper.GetKernel().Resolve<ISubscriptionsService>();
-				var scheduledTasksService = Bootstrapper.GetKernel().Resolve<IScheduledTasksService>();
-				var departmentService = Bootstrapper.GetKernel().Resolve<IDepartmentsService>();
-				var actionLogsService = Bootstrapper.GetKernel().Resolve<IActionLogsService>();
-				var customStatesService = Bootstrapper.GetKernel().Resolve<ICustomStateService>();
-				var usersService = Bootstrapper.GetKernel().Resolve<IUsersService>();
+				subscriptionsService.ClearCacheForCurrentPayment(DepartmentId);
+				departmentsService.InvalidateDepartmentUsersInCache(DepartmentId);
+				departmentsService.InvalidateDepartmentInCache(DepartmentId);
+				departmentsService.InvalidatePersonnelNamesInCache(DepartmentId);
+				userProfileService.ClearAllUserProfilesFromCache(DepartmentId);
+				usersService.ClearCacheForDepartment(DepartmentId);
+				actionLogsService.InvalidateActionLogs(DepartmentId);
+				customStateService.InvalidateCustomStateInCache(DepartmentId);
+				departmentsService.InvalidateDepartmentMembers();
 
-				subscriptionService.ClearCacheForCurrentPayment(args.DepartmentId);
-				departmentService.InvalidateDepartmentUsersInCache(args.DepartmentId);
-				departmentService.InvalidateDepartmentInCache(args.DepartmentId);
-				departmentService.InvalidatePersonnelNamesInCache(args.DepartmentId);
-				userProfileService.ClearAllUserProfilesFromCache(args.DepartmentId);
-				usersService.ClearCacheForDepartment(args.DepartmentId);
-				actionLogsService.InvalidateActionLogs(args.DepartmentId);
-				customStatesService.InvalidateCustomStateInCache(args.DepartmentId);
-				departmentService.InvalidateDepartmentMembers();
-
-				_console.WriteLine("Completed Clearing Cache");
+				logger.LogInformation("Completed Clearing Cache");
 			}
 			catch (Exception ex)
 			{
-				_console.WriteLine("Failed to clear Cache");
-				_console.WriteLine(ex.ToString());
+				logger.LogError("Failed to clear Cache");
+				logger.LogError(ex.ToString());
+				return ExitCode.Failed;
 			}
 
-			return "";
+			return ExitCode.Success;
+		}
+
+		/// <summary>
+		///     Retrieves the value of a specified configuration key.
+		/// </summary>
+		/// <param name="key">The configuration key whose value needs to be retrieved.</param>
+		/// <returns>The value of the specified configuration key.</returns>
+		/// <exception cref="InvalidOperationException">Thrown if the configuration key is not specified or the value is empty.</exception>
+		private string GetConfigurationValue(string key)
+		{
+			var value = configuration.GetValue<string>(key);
+
+			if (string.IsNullOrEmpty(value))
+				throw new InvalidOperationException(
+					$"Configuration key '{key}' not specified or is empty. Please specify a value for '{key}'.");
+
+			return value;
 		}
 	}
 }

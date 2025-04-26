@@ -8,6 +8,8 @@ using Microsoft.Extensions.Options;
 using Resgrid.Model.Identity;
 using Resgrid.Model.Repositories;
 using Resgrid.Model.Services;
+using IdentityRole = Resgrid.Model.Identity.IdentityRole;
+using IdentityUser = Resgrid.Model.Identity.IdentityUser;
 
 namespace Resgrid.Providers.Claims
 {
@@ -195,6 +197,7 @@ namespace Resgrid.Providers.Claims
 					ClaimsLogic.AddFormsClaims(id, departmentAdmin);
 					ClaimsLogic.AddVoiceClaims(id, departmentAdmin);
 					ClaimsLogic.AddCustomStateClaims(id, departmentAdmin);
+					ClaimsLogic.AddContactsClaims(id, departmentAdmin, permissions, isGroupAdmin, roles);
 				}
 			}
 

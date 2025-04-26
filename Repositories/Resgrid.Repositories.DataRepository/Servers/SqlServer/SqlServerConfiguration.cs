@@ -118,14 +118,20 @@ namespace Resgrid.Repositories.DataRepository.Servers.SqlServer
 					INNER JOIN %SCHEMA%.%ASPNETUSERSTABLE% ON %SCHEMA%.%ASPNETUSERSTABLE%.Id = %SCHEMA%.%DEPARTMENTMEMBERSTABLE%.UserId
 					WHERE [DepartmentId] = %ID%";
 
-			SelectMembersWithinLimitsQuery = @"DECLARE @limit INT
-							SET @limit = (SELECT TOP 1 pl.LimitValue FROM Payments p
-							INNER JOIN PlanLimits pl ON pl.PlanId = p.PlanId
-							WHERE DepartmentId = %ID% AND pl.LimitType = 1 AND p.EffectiveOn <= GETUTCDATE() AND p.EndingOn >= GETUTCDATE()
-							ORDER BY PaymentId DESC)
+			//SelectMembersWithinLimitsQuery = @"DECLARE @limit INT
+			//				SET @limit = (SELECT TOP 1 (pl.LimitValue * p.Quantity) FROM Payments p
+			//				INNER JOIN PlanLimits pl ON pl.PlanId = p.PlanId
+			//				WHERE DepartmentId = %ID% AND pl.LimitType = 1 AND p.EffectiveOn <= GETUTCDATE() AND p.EndingOn >= GETUTCDATE()
+			//				ORDER BY PaymentId DESC)
 
 
-							SELECT TOP (@limit) %SCHEMA%.%DEPARTMENTMEMBERSTABLE%.*, %SCHEMA%.%ASPNETUSERSTABLE%.Email as 'MembershipEmail', %SCHEMA%.%ASPNETUSERSTABLE%.*
+			//				SELECT TOP (@limit) %SCHEMA%.%DEPARTMENTMEMBERSTABLE%.*, %SCHEMA%.%ASPNETUSERSTABLE%.Email as 'MembershipEmail', %SCHEMA%.%ASPNETUSERSTABLE%.*
+			//				FROM %SCHEMA%.%DEPARTMENTMEMBERSTABLE%
+			//				INNER JOIN %SCHEMA%.%ASPNETUSERSTABLE% ON %SCHEMA%.%ASPNETUSERSTABLE%.Id = %SCHEMA%.%DEPARTMENTMEMBERSTABLE%.UserId
+			//				WHERE [DepartmentId] = %ID% AND [IsDeleted] = 0";
+
+			SelectMembersWithinLimitsQuery = @"
+							SELECT %SCHEMA%.%DEPARTMENTMEMBERSTABLE%.*, %SCHEMA%.%ASPNETUSERSTABLE%.Email as 'MembershipEmail', %SCHEMA%.%ASPNETUSERSTABLE%.*
 							FROM %SCHEMA%.%DEPARTMENTMEMBERSTABLE%
 							INNER JOIN %SCHEMA%.%ASPNETUSERSTABLE% ON %SCHEMA%.%ASPNETUSERSTABLE%.Id = %SCHEMA%.%DEPARTMENTMEMBERSTABLE%.UserId
 							WHERE [DepartmentId] = %ID% AND [IsDeleted] = 0";
@@ -150,20 +156,20 @@ namespace Resgrid.Repositories.DataRepository.Servers.SqlServer
 			DepartmentSettingsTable = "DepartmentSettings";
 			SelectDepartmentSettingByDepartmentIdTypeQuery =
 				"SELECT * FROM %SCHEMA%.%TABLENAME% WHERE [DepartmentId] = %DID% AND SettingType = %SETTINGTYPE%";
-			SelectDepartmentSettingByTypeUserIdQuery = @"SELECT ds.* FROM [DepartmentSettings] ds
-						INNER JOIN [DepartmentMembers] dm ON ds.DepartmentId = dm.DepartmentId
+			SelectDepartmentSettingByTypeUserIdQuery = @"SELECT ds.* FROM %SCHEMA%.%DEPARTMENTSETTINGSTABLE% ds
+						INNER JOIN %SCHEMA%.%DEPARTMENTMEMBERSTABLE% dm ON ds.DepartmentId = dm.DepartmentId
 						WHERE dm.UserId = %USERID% AND ds.SettingType = %SETTINGTYPE%";
 			SelectDepartmentSettingBySettingAndTypeQuery = @"SELECT ds.* FROM %SCHEMA%.%TABLENAME% ds
 						WHERE ds.Setting = %SETTING% AND ds.SettingType = %SETTINGTYPE%";
 			SelectAllDepartmentManagerInfoQuery = @"SELECT d.DepartmentId, d.Name, up.FirstName, up.LastName, u.Email
-						FROM [Departments] d
-						INNER JOIN [AspNetUsers] u ON u.Id = d.ManagingUserId
-						LEFT OUTER JOIN [UserProfiles] up ON up.UserId = d.ManagingUserId";
+						FROM %SCHEMA%.%DEPARTMENTSTABLE% d
+						INNER JOIN %SCHEMA%.%ASPNETUSERSTABLE% u ON u.Id = d.ManagingUserId
+						LEFT OUTER JOIN UserProfiles up ON up.UserId = d.ManagingUserId";
 			SelectDepartmentManagerInfoByEmailQuery =
 				@"SELECT d.DepartmentId, d.Name, up.FirstName, up.LastName, u.Email
-						FROM [Departments] d
-						INNER JOIN [AspNetUsers] u ON u.Id = d.ManagingUserId
-						LEFT OUTER JOIN [UserProfiles] up ON up.UserId = d.ManagingUserId
+						FROM %SCHEMA%.%DEPARTMENTSTABLE% d
+						INNER JOIN %SCHEMA%.%ASPNETUSERSTABLE% u ON u.Id = d.ManagingUserId
+						LEFT OUTER JOIN %SCHEMA%.%USERPROFILESTABLE% up ON up.UserId = d.ManagingUserId
 						WHERE u.Email = %EMAILADDRESS%";
 
 			#endregion Department Settings
@@ -215,7 +221,11 @@ namespace Resgrid.Repositories.DataRepository.Servers.SqlServer
 			#region Departments
 
 			DepartmentsTable = "Departments";
-			SelectDepartmentByLinkCodeQuery = "SELECT * FROM %SCHEMA%.%TABLENAME% WHERE [LinkCode] = %CODE%";
+			SelectDepartmentByLinkCodeQuery = @"
+					SELECT %SCHEMA%.%DEPARTMENTSTABLE%.*, %SCHEMA%.%DEPARTMENTMEMBERSTABLE%.*
+						FROM %SCHEMA%.%DEPARTMENTSTABLE%
+						LEFT JOIN %SCHEMA%.%DEPARTMENTMEMBERSTABLE% ON %SCHEMA%.%DEPARTMENTMEMBERSTABLE%.[DepartmentId] =  %SCHEMA%.%DEPARTMENTSTABLE%.[DepartmentId]
+					WHERE [LinkCode] = %CODE%";
 			SelectDepartmentByIdQuery = @"
 					SELECT d.*, dt.*
 					FROM %SCHEMA%.%DEPARTMENTSTABLE% d
@@ -253,12 +263,11 @@ namespace Resgrid.Repositories.DataRepository.Servers.SqlServer
 							INNER JOIN Departments d ON d.DepartmentId = dm1.DepartmentId
 							INNER JOIN DepartmentMembers dm ON dm.DepartmentId = d.DepartmentId
 							WHERE u.UserName = %USERNAME% AND d.DepartmentId = dm.DepartmentId AND dm.IsDeleted = 0 AND (dm.IsActive = 1 OR dm.IsDefault = 1)";
-			SelectDepartmentByUserIdQuery = @"SELECT d.*, dm.*
-							FROM AspNetUsers u
-							INNER JOIN DepartmentMembers dm1 ON dm1.UserId = u.Id
+			SelectDepartmentByUserIdQuery =@"SELECT d.*, dm.*
+							FROM DepartmentMembers dm1
 							INNER JOIN Departments d ON d.DepartmentId = dm1.DepartmentId
 							INNER JOIN DepartmentMembers dm ON dm.DepartmentId = d.DepartmentId
-							WHERE u.Id = %USERID% AND d.DepartmentId = dm.DepartmentId AND dm.IsDeleted = 0";
+							WHERE dm.UserId = %USERID% AND d.DepartmentId = dm.DepartmentId AND dm.IsDeleted = 0 AND (dm.IsActive = 1 OR dm.IsDefault = 1)";
 			SelectValidDepartmentByUsernameQuery =
 				@"SELECT dm.UserId as 'UserId', dm.IsDisabled as 'IsDisabled', dm.IsDeleted as 'IsDeleted', d.DepartmentId as 'DepartmentId', d.Code as 'Code'
 							FROM AspNetUsers u
@@ -282,23 +291,23 @@ namespace Resgrid.Repositories.DataRepository.Servers.SqlServer
 			SelectRoleByDidAndNameQuery =
 				"SELECT * FROM %SCHEMA%.%TABLENAME% WHERE [DepartmentId] = %DID% AND [Name] = %NAME%";
 			SelectRolesByDidAndUserQuery = @"
-					SELECT * FROM [PersonnelRoles] pr
-					INNER JOIN [PersonnelRoleUsers] pru ON pr.[PersonnelRoleId] = pru.[PersonnelRoleId]
-					WHERE pru.[UserId] = %USERID% AND pr.[DepartmentId] = %DID%";
+					SELECT * FROM %SCHEMA%.%PERSONNELROLESTABLE% pr
+					INNER JOIN %SCHEMA%.%PERSONNELROLEUSERSTABLE% pru ON pr.PersonnelRoleId = pru.PersonnelRoleId
+					WHERE pru.UserId = %USERID% AND pr.DepartmentId = %DID%";
 			//SelectRoleUsersByRoleQuery = "SELECT * FROM %SCHEMA%.%TABLENAME% WHERE [PersonnelRoleId] = %ROLEID%";
 			SelectRoleUsersByRoleQuery = @"
-					SELECT * FROM [PersonnelRoleUsers] pru
-					INNER JOIN [dbo].DepartmentMembers dm ON dm.UserId = pru.UserId AND dm.[DepartmentId] = pru.[DepartmentId]
-					WHERE pru.[PersonnelRoleId] = %ROLEID% AND dm.[IsDisabled] = 0 AND dm.[IsDeleted] = 0";
+					SELECT * FROM %SCHEMA%.%PERSONNELROLEUSERSTABLE% pru
+					INNER JOIN %SCHEMA%.%DEPARTMENTMEMBERSTABLE% dm ON dm.UserId = pru.UserId AND dm.DepartmentId = pru.DepartmentId
+					WHERE pru.PersonnelRoleId = %ROLEID% AND dm.IsDisabled = 0 AND dm.IsDeleted = 0";
 
 			SelectRoleUsersByUserQuery = @"
-					SELECT * FROM [PersonnelRoleUsers] pru
-					INNER JOIN [PersonnelRoles] pr ON pru.[PersonnelRoleId] = pr.[PersonnelRoleId]
-					WHERE pru.[UserId] = %USERID% AND pr.[DepartmentId] = %DID%";
+					SELECT * FROM %SCHEMA%.%PERSONNELROLEUSERSTABLE% pru
+					INNER JOIN %SCHEMA%.%PERSONNELROLESTABLE% pr ON pru.PersonnelRoleId = pr.PersonnelRoleId
+					WHERE pru.UserId = %USERID% AND pr.DepartmentId = %DID%";
 			SelectRoleUsersByDidQuery = @"
-					SELECT * FROM [PersonnelRoleUsers] pru
-					INNER JOIN [PersonnelRoles] pr ON pru.[PersonnelRoleId] = pr.[PersonnelRoleId]
-					WHERE pr.[DepartmentId] = %DID%";
+					SELECT * FROM %SCHEMA%.%PERSONNELROLEUSERSTABLE% pru
+					INNER JOIN %SCHEMA%.%PERSONNELROLESTABLE% pr ON pru.PersonnelRoleId = pr.PersonnelRoleId
+					WHERE pr.DepartmentId = %DID%";
 			SelectRolesByDidQuery = @"
 					SELECT pr.*, pru.*
 					FROM %SCHEMA%.%ROLESTABLE% pr
@@ -684,9 +693,9 @@ namespace Resgrid.Repositories.DataRepository.Servers.SqlServer
 			DeleteUnitActiveRolesByUnitIdQuery = @"DELETE FROM %SCHEMA%.%TABLENAME% WHERE [UnitId] = %UNITID%";
 			SelectActiveRolesForUnitsByDidQuery = @"SELECT * FROM %SCHEMA%.%TABLENAME% WHERE [DepartmentId] = %DID%";
 			SelectUnitsByDIdQuery = @"
-					SELECT u.*, dg.*
+					SELECT u.*, ur.*
 					FROM [dbo].[Units] u
-					LEFT JOIN [dbo].[DepartmentGroups] dg ON dg.[DepartmentGroupId] = u.[StationGroupId]
+					LEFT JOIN [dbo].[UnitRoles] ur ON ur.[UnitId] = u.[UnitId]
 					WHERE u.[DepartmentId] = %DID%";
 
 			#endregion Units
@@ -1032,8 +1041,11 @@ namespace Resgrid.Repositories.DataRepository.Servers.SqlServer
 			CallAttachmentsTable = "CallAttachments";
 			DepartmentCallPrioritiesTable = "DepartmentCallPriorities";
 			CallProtocolsTable = "CallProtocols";
+			CallContactsTable = "CallContacts";
 			SelectAllCallsByDidDateQuery =
 				"SELECT * FROM %SCHEMA%.%TABLENAME% WHERE [DepartmentId] = %DID% AND [IsDeleted] = 0 AND [LoggedOn] >= %STARTDATE% AND [LoggedOn] <= %ENDDATE%";
+			SelectCallsCountByDidDateQuery =
+				"SELECT COUNT(*) FROM %SCHEMA%.%TABLENAME% WHERE [DepartmentId] = %DID% AND [LoggedOn] >= %STARTDATE% AND [LoggedOn] <= %ENDDATE%";
 			SelectAllClosedCallsByDidDateQuery =
 				"SELECT * FROM %SCHEMA%.%TABLENAME% WHERE [DepartmentId] = %DID% AND [IsDeleted] = 0 AND [State] > 0";
 			SelectAllCallDispatchesByGroupIdQuery =
@@ -1081,6 +1093,11 @@ namespace Resgrid.Repositories.DataRepository.Servers.SqlServer
 					SELECT *
 					FROM %SCHEMA%.%TABLENAME%
 					WHERE [HasBeenDispatched] = 0 AND [IsDeleted] = 0 AND [DepartmentId] = %DID%";
+			SelectCallsByContactQuery= @"
+					SELECT c.*
+					FROM %SCHEMA%.%CALLSTABLE% c
+					INNER JOIN %SCHEMA%.%CALLCONTACTSTABLE% cc ON cc.CallId = c.CallId
+					WHERE cc.ContactId = %CONTACTID% AND c.IsDeleted = 0 AND c.DepartmentId = %DID%";
 
 			#endregion Calls
 
@@ -1092,10 +1109,10 @@ namespace Resgrid.Repositories.DataRepository.Servers.SqlServer
 
 			SelectGroupMembersByGroupIdQuery = @"
 					SELECT dgm.*
-					FROM [dbo].DepartmentGroupMembers dgm
-					INNER JOIN [dbo].DepartmentGroups dg ON dg.[DepartmentGroupId] =  dgm.[DepartmentGroupId]
-					INNER JOIN [dbo].DepartmentMembers dm ON dm.UserId = dgm.UserId AND dm.[DepartmentId] = dg.[DepartmentId]
-					WHERE dgm.[DepartmentGroupId] = %GROUPID% AND dm.[IsDisabled] = 0 AND dm.[IsDeleted] = 0";
+					FROM %SCHEMA%.%GROUPMEMBERSSTABLE% dgm
+					INNER JOIN %SCHEMA%.%GROUPSTABLE% dg ON dg.DepartmentGroupId =  dgm.DepartmentGroupId
+					INNER JOIN %SCHEMA%.%DEPARTMENTMEMBERSTABLE% dm ON dm.UserId = dgm.UserId AND dm.DepartmentId = dg.DepartmentId
+					WHERE dgm.DepartmentGroupId = %GROUPID% AND dm.IsDisabled = 0 AND dm.IsDeleted = 0";
 
 			SelectGroupMembersByUserDidQuery = @"
 					SELECT dgm.*, dg.*
@@ -1133,6 +1150,11 @@ namespace Resgrid.Repositories.DataRepository.Servers.SqlServer
 			DeleteGroupMembersByGroupIdDidQuery = @"
 					DELETE FROM %SCHEMA%.%TABLENAME%
 					WHERE DepartmentId = %DID% AND DepartmentGroupId = %ID%";
+			SelectGroupAdminsByDidQuery = @"
+					SELECT dgm.*, dg.*
+					FROM %SCHEMA%.%GROUPMEMBERSSTABLE% dgm
+					INNER JOIN %SCHEMA%.%GROUPSTABLE% dg ON dg.[DepartmentGroupId] =  dgm.[DepartmentGroupId]
+					WHERE dgm.[IsAdmin] = 1 AND dgm.[DepartmentId] = %DID%";
 			#endregion Department Groups
 
 			#region Payments
@@ -1140,7 +1162,7 @@ namespace Resgrid.Repositories.DataRepository.Servers.SqlServer
 			PaymentsTable = "Payments";
 			SelectGetDepartmentPlanCountsQuery = @"
 					SELECT
-					(SELECT COUNT(*) FROM DepartmentMembers dm WHERE dm.DepartmentId = %DID% AND IsDisabled = 1) AS 'UsersCount',
+					(SELECT COUNT(*) FROM DepartmentMembers dm WHERE dm.DepartmentId = %DID% AND IsDisabled = 0 AND IsDeleted = 0) AS 'UsersCount',
 					(SELECT COUNT(*) FROM DepartmentGroups dg WHERE dg.DepartmentId = %DID%) AS 'GroupsCount',
 					(SELECT COUNT(*) FROM Units u WHERE u.DepartmentId = %DID%) AS 'UnitsCount'";
 			SelectPaymentByTransactionIdQuery =
@@ -1304,6 +1326,54 @@ namespace Resgrid.Repositories.DataRepository.Servers.SqlServer
 					FROM %SCHEMA%.%WORKSHIFTFILLSTABLE%
 					WHERE [WorkshiftId] = %ID%";
 			#endregion Workshifts
+
+			#region CallReferences
+			CallReferencesTable = "CallReferences";
+			SelectAllCallReferencesBySourceCallIdQuery = @"
+					SELECT cr.*, c.*
+					FROM %SCHEMA%.%CALLREFERENCESTABLE% cr
+					INNER JOIN %SCHEMA%.%CALLSTABLE% c ON cr.TargetCallId = c.CallId
+					WHERE cr.[SourceCallId] = %CALLID%";
+			SelectAllCallReferencesByTargetCallIdQuery = @"
+					SELECT cr.*, c.*
+					FROM %SCHEMA%.%CALLREFERENCESTABLE% cr
+					INNER JOIN %SCHEMA%.%CALLSTABLE% c ON cr.SourceCallId = c.CallId
+					WHERE cr.[TargetCallId] = %CALLID%";
+			#endregion CallReferences
+
+			#region Scheduled Tasks
+
+			ScheduledTasksTable = "ScheduledTasks";
+			SelectAllUpcomingOrRecurringReportTasksQuery = @"
+					SELECT st.*, d.TimeZone as 'DepartmentTimeZone', u.Email as 'UserEmailAddress'
+					FROM %SCHEMA%.%SCHEDULEDTASKSTABLE% st
+					INNER JOIN %SCHEMA%.%DEPARTMENTSTABLE% d ON st.DepartmentId = d.DepartmentId
+					INNER JOIN %SCHEMA%.%ASPNETUSERSTABLE% u ON st.UserId = u.Id
+					WHERE st.[Active] = 1 AND st.[TaskType] = 3 AND (st.[SpecifcDate] IS NULL OR st.[SpecifcDate] > %DATETIME%) AND st.[DepartmentId] != 0
+			";
+
+			#endregion Scheduled Tasks
+
+			#region Contacts
+			ContactsTableName = "Contacts";
+			ContactAssociationsTableName = "ContactAssociations";
+			ContactCategoriesTableName = "ContactCategories";
+			ContactNotesTableName = "ContactNotes";
+			ContactNoteTypesTableName = "ContactNoteTypes";
+			CallContactTableName = "CallContacts";
+			SelectContactsByCategoryIdQuery = @"
+					SELECT *
+					FROM %SCHEMA%.%TABLENAME%
+					WHERE [ContactCategoryId] = %CATEGORYID% AND DepartmentId = %DID%";
+			SelectContactNotesByContactIdQuery = @"
+					SELECT *
+					FROM %SCHEMA%.%TABLENAME%
+					WHERE [ContactId] = %CONTACTID%";
+			SelectAllCallContactsByCallIdQuery = @"
+					SELECT *
+					FROM %SCHEMA%.%TABLENAME%
+					WHERE CallId = %CALLID%";
+			#endregion Contacts
 		}
 }
 }

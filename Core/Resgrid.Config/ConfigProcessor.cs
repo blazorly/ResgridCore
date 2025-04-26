@@ -37,6 +37,8 @@ namespace Resgrid.Config
 									FieldInfo prop = configObj.GetField(parts[1]);
 									if (null != prop)
 									{
+										Console.WriteLine($"Resgrid.Config: Setting Value for {prop.ToString()}");
+
 										if (prop.FieldType.BaseType == typeof(Enum))
 										{
 											Type t = Nullable.GetUnderlyingType(prop.FieldType) ?? prop.FieldType;
@@ -72,11 +74,13 @@ namespace Resgrid.Config
 
 		public static bool LoadAndProcessEnvVariables(IEnumerable<KeyValuePair<string, string>> values)
 		{
+			Console.WriteLine($"Resgrid.Config: Processing Environment Variables");
+
 			bool hasSetAtLeastOneVariable = false;
 
-			try
+			foreach (var configValue in values)
 			{
-				foreach (var configValue in values)
+				try
 				{
 					if (!String.IsNullOrWhiteSpace(configValue.Value) && configValue.Key.StartsWith("RESGRID"))
 					{
@@ -94,6 +98,7 @@ namespace Resgrid.Config
 								if (null != prop)
 								{
 									Console.WriteLine($"Resgrid.Config: Setting Value for {prop.ToString()}");
+
 									if (prop.FieldType.BaseType == typeof(Enum))
 									{
 										Type t = Nullable.GetUnderlyingType(prop.FieldType) ?? prop.FieldType;
@@ -115,14 +120,14 @@ namespace Resgrid.Config
 						}
 					}
 				}
-
-				return hasSetAtLeastOneVariable;
-
+				catch (Exception ex)
+				{
+					Console.WriteLine($"Resgrid.Config: Error processing Environment Variable: {configValue.Key}");
+					Console.WriteLine(ex.ToString());
+				}
 			}
-			catch (Exception ex)
-			{
-				return false;
-			}
+
+			return hasSetAtLeastOneVariable;
 		}
 	}
 }

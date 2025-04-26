@@ -7,6 +7,7 @@ using Resgrid.Model.Queue;
 using Resgrid.Providers.Bus.Rabbit;
 using Resgrid.Workers.Console.Commands;
 using Resgrid.Workers.Framework.Logic;
+using Resgrid.Workers.Framework.Workers.Security;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -23,6 +24,8 @@ namespace Resgrid.Workers.Console.Tasks
 		public ILogger _logger;
 		private CancellationToken _cancellationToken;
 
+		private SecurityLogic _securityLogic;
+
 		public QueuesProcessorTask(ILogger logger)
 		{
 			_logger = logger;
@@ -31,7 +34,7 @@ namespace Resgrid.Workers.Console.Tasks
 		public async Task ProcessAsync(QueuesProcessorCommand command, IQuidjiboProgress progress, CancellationToken cancellationToken)
 		{
 			_cancellationToken = cancellationToken;
-			
+
 			if (progress != null)
 				progress.Report(1, $"Starting the {Name} Task");
 
@@ -42,12 +45,13 @@ namespace Resgrid.Workers.Console.Tasks
 			queue.NotificationQueueReceived += OnNotificationQueueReceived;
 			queue.ShiftNotificationQueueReceived += OnShiftNotificationQueueReceived;
 			queue.CqrsEventQueueReceived += OnCqrsEventQueueReceived;
-			queue.PaymentEventQueueReceived += OnPaymentEventQueueReceived;
+			queue.PaymentEventQueueReceived = null;//queue.PaymentEventQueueReceived += OnPaymentEventQueueReceived;
 			queue.AuditEventQueueReceived += OnAuditEventQueueReceived;
 			queue.UnitLocationEventQueueReceived += OnUnitLocationEventQueueReceived;
 			queue.PersonnelLocationEventQueueReceived += OnPersonnelLocationEventQueueReceived;
-			
-			await queue.Start();
+			queue.SecurityRefreshEventQueueReceived += OnSecurityRefreshEventQueueReceived;
+
+			await queue.Start("QueueProcessor-CQRS");
 
 			while (!_cancellationToken.IsCancellationRequested)
 			{
@@ -100,12 +104,12 @@ namespace Resgrid.Workers.Console.Tasks
 			_logger.LogInformation($"{Name}: Finished processing of system cqrs queue item with type of {cqrs.Type}.");
 		}
 
-		private async Task OnPaymentEventQueueReceived(CqrsEvent cqrs)
-		{
-			_logger.LogInformation($"{Name}: Payment Queue Received with a type of {cqrs.Type}, starting processing...");
-			await PaymentQueueLogic.ProcessPaymentQueueItem(cqrs);
-			_logger.LogInformation($"{Name}: Finished processing of Payment queue item with type of {cqrs.Type}.");
-		}
+		//private async Task OnPaymentEventQueueReceived(CqrsEvent cqrs)
+		//{
+		//	_logger.LogInformation($"{Name}: Payment Queue Received with a type of {cqrs.Type}, starting processing...");
+		//	await PaymentQueueLogic.ProcessPaymentQueueItem(cqrs);
+		//	_logger.LogInformation($"{Name}: Finished processing of Payment queue item with type of {cqrs.Type}.");
+		//}
 
 		private async Task OnAuditEventQueueReceived(AuditEvent auditEvent)
 		{
@@ -113,7 +117,7 @@ namespace Resgrid.Workers.Console.Tasks
 			await AuditQueueLogic.ProcessAuditQueueItem(auditEvent, _cancellationToken);
 			_logger.LogInformation($"{Name}: Finished processing of Audit queue item with an id of {auditEvent.EventId}.");
 		}
-		
+
 		private async Task OnUnitLocationEventQueueReceived(UnitLocationEvent unitLocationEvent)
 		{
 			_logger.LogInformation($"{Name}: Unit Location Queue Received with an id of {unitLocationEvent.EventId}, starting processing...");
@@ -126,6 +130,21 @@ namespace Resgrid.Workers.Console.Tasks
 			_logger.LogInformation($"{Name}: Personnel Location Queue Received with an id of {personnelLocationEvent.EventId}, starting processing...");
 			await PersonnelLocationQueueLogic.ProcessPersonnelLocationQueueItem(personnelLocationEvent);
 			_logger.LogInformation($"{Name}: Finished processing of Personnel Location queue item with an id of {personnelLocationEvent.EventId}.");
+		}
+
+		private async Task OnSecurityRefreshEventQueueReceived(SecurityRefreshEvent securityRefreshEvent)
+		{
+			_logger.LogInformation($"{Name}: Security Refresh Queue Received with an id of {securityRefreshEvent.EventId}, starting processing...");
+
+			if (_securityLogic == null)
+				_securityLogic = new SecurityLogic();
+
+			SecurityQueueItem item = new SecurityQueueItem();
+			item.DepartmentId = securityRefreshEvent.DepartmentId;
+			item.Type = securityRefreshEvent.Type;
+
+			await _securityLogic.Process(item);
+			_logger.LogInformation($"{Name}: Finished processing of Security Refresh queue item with an id of {securityRefreshEvent.EventId}.");
 		}
 	}
 }

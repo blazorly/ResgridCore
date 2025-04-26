@@ -165,7 +165,7 @@ namespace Resgrid.Services
 		{
 			var saved = await _customStateRepository.SaveOrUpdateAsync(customState, cancellationToken);
 
-			_cacheProvider.Remove(string.Format(CacheKey, customState.DepartmentId));
+			await _cacheProvider.RemoveAsync(string.Format(CacheKey, customState.DepartmentId));
 
 			_eventAggregator.SendMessage<DepartmentSettingsUpdateEvent>(new DepartmentSettingsUpdateEvent() { DepartmentId = customState.DepartmentId });
 
@@ -206,15 +206,33 @@ namespace Resgrid.Services
 
 		public async Task<CustomState> UpdateAsync(CustomState state, List<CustomStateDetail> details, CancellationToken cancellationToken = default(CancellationToken))
 		{
-			foreach (var existingDetails in state.Details)
+			var missingDetails = state.Details.Where(p => !details.Any(p2 => p2.CustomStateDetailId == p.CustomStateDetailId)).ToList();
+
+			if (missingDetails != null && missingDetails.Any())
 			{
-				await DeleteDetailAsync(existingDetails, cancellationToken);
+				foreach (var missingDetail in missingDetails)
+				{
+					await DeleteDetailAsync(missingDetail, cancellationToken);
+					state.Details.Remove(missingDetail);
+				}
 			}
 
 			foreach (var detail in details)
 			{
 				detail.CustomStateId = state.CustomStateId;
-				state.Details.Add(detail);
+				if (detail.CustomStateDetailId == 0)
+				{
+					state.Details.Add(detail);
+				}
+				else
+				{
+					var existingDetail = state.Details.FirstOrDefault(x => x.CustomStateDetailId == detail.CustomStateDetailId);
+
+					if (existingDetail != null)
+					{
+						existingDetail.Order = detail.Order;
+					}
+				}
 			}
 
 			return await SaveAsync(state, cancellationToken);
@@ -302,15 +320,15 @@ namespace Resgrid.Services
 		public List<CustomStateDetail> GetDefaultUnitStatuses()
 		{
 			List<CustomStateDetail> details = new List<CustomStateDetail>();
-			details.Add(new CustomStateDetail() { CustomStateDetailId = (int)UnitStateTypes.Responding, ButtonText = "Responding", ButtonColor = "#32db64", NoteType = (int)CustomStateNoteTypes.Optional, DetailType = (int)CustomStateDetailTypes.Calls });
-			details.Add(new CustomStateDetail() { CustomStateDetailId = (int)UnitStateTypes.Available, ButtonText = "Available", ButtonColor = "#222222", NoteType = (int)CustomStateNoteTypes.Optional, DetailType = (int)CustomStateDetailTypes.Stations });
+			details.Add(new CustomStateDetail() { CustomStateDetailId = (int)UnitStateTypes.Responding, ButtonText = "Responding", ButtonColor = "#32db64", TextColor = "#ffffff", NoteType = (int)CustomStateNoteTypes.Optional, DetailType = (int)CustomStateDetailTypes.Calls });
+			details.Add(new CustomStateDetail() { CustomStateDetailId = (int)UnitStateTypes.Available, ButtonText = "Available", ButtonColor = "#d1dade", TextColor = "5E5E5E", NoteType = (int)CustomStateNoteTypes.Optional, DetailType = (int)CustomStateDetailTypes.Stations });
 			//details.Add(new CustomStateDetail() { CustomStateDetailId = (int)UnitStateTypes.Unavailable, ButtonText = "Unavailable", ButtonColor = "" });
-			details.Add(new CustomStateDetail() { CustomStateDetailId = (int)UnitStateTypes.Committed, ButtonText = "Committed", ButtonColor = "#50b8de", NoteType = (int)CustomStateNoteTypes.Optional, DetailType = (int)CustomStateDetailTypes.CallsAndStations });
+			details.Add(new CustomStateDetail() { CustomStateDetailId = (int)UnitStateTypes.Committed, ButtonText = "Committed", ButtonColor = "#50b8de", TextColor = "#ffffff", NoteType = (int)CustomStateNoteTypes.Optional, DetailType = (int)CustomStateDetailTypes.CallsAndStations });
 			//details.Add(new CustomStateDetail() { CustomStateDetailId = (int)UnitStateTypes.Delayed, ButtonText = "Delayed", ButtonColor = "" });
-			details.Add(new CustomStateDetail() { CustomStateDetailId = (int)UnitStateTypes.OnScene, ButtonText = "On Scene", ButtonColor = "#69BB7B", NoteType = (int)CustomStateNoteTypes.Optional, DetailType = (int)CustomStateDetailTypes.Calls });
-			details.Add(new CustomStateDetail() { CustomStateDetailId = (int)UnitStateTypes.Staging, ButtonText = "Staging", ButtonColor = "#ffc900", NoteType = (int)CustomStateNoteTypes.Optional, DetailType = (int)CustomStateDetailTypes.Calls });
-			details.Add(new CustomStateDetail() { CustomStateDetailId = (int)UnitStateTypes.Returning, ButtonText = "Returning", ButtonColor = "#387ef5", NoteType = (int)CustomStateNoteTypes.Optional, DetailType = (int)CustomStateDetailTypes.Stations });
-			details.Add(new CustomStateDetail() { CustomStateDetailId = (int)UnitStateTypes.OutOfService, ButtonText = "Out of Service", ButtonColor = "#ff6b69", NoteType = (int)CustomStateNoteTypes.Optional });
+			details.Add(new CustomStateDetail() { CustomStateDetailId = (int)UnitStateTypes.OnScene, ButtonText = "On Scene", ButtonColor = "#69BB7B", TextColor = "#ffffff", NoteType = (int)CustomStateNoteTypes.Optional, DetailType = (int)CustomStateDetailTypes.Calls });
+			details.Add(new CustomStateDetail() { CustomStateDetailId = (int)UnitStateTypes.Staging, ButtonText = "Staging", ButtonColor = "#ffc900", TextColor = "#ffffff", NoteType = (int)CustomStateNoteTypes.Optional, DetailType = (int)CustomStateDetailTypes.Calls });
+			details.Add(new CustomStateDetail() { CustomStateDetailId = (int)UnitStateTypes.Returning, ButtonText = "Returning", ButtonColor = "#387ef5", TextColor = "#ffffff", NoteType = (int)CustomStateNoteTypes.Optional, DetailType = (int)CustomStateDetailTypes.Stations });
+			details.Add(new CustomStateDetail() { CustomStateDetailId = (int)UnitStateTypes.OutOfService, ButtonText = "Out of Service", ButtonColor = "#ff6b69", TextColor = "#ffffff", NoteType = (int)CustomStateNoteTypes.Optional });
 			//details.Add(new CustomStateDetail() { CustomStateDetailId = (int)UnitStateTypes.Cancelled, ButtonText = "Cancelled", ButtonColor = "#ff6b69" });
 			//details.Add(new CustomStateDetail() { CustomStateDetailId = (int)UnitStateTypes.Released, ButtonText = "Released", ButtonColor = "" });
 			//details.Add(new CustomStateDetail() { CustomStateDetailId = (int)UnitStateTypes.Manual, ButtonText = "Manual", ButtonColor = "" });
@@ -323,13 +341,13 @@ namespace Resgrid.Services
 		public List<CustomStateDetail> GetDefaultPersonStatuses()
 		{
 			List<CustomStateDetail> details = new List<CustomStateDetail>();
-			details.Add(new CustomStateDetail() { CustomStateDetailId = (int)ActionTypes.Responding, ButtonText = "Responding", ButtonColor = "#449d44", NoteType = (int)CustomStateNoteTypes.Optional, DetailType = (int)CustomStateDetailTypes.CallsAndStations });
-			details.Add(new CustomStateDetail() { CustomStateDetailId = (int)ActionTypes.NotResponding, ButtonText = "Not Responding", ButtonColor = "#ed5565", NoteType = (int)CustomStateNoteTypes.Optional });
-			details.Add(new CustomStateDetail() { CustomStateDetailId = (int)ActionTypes.OnScene, ButtonText = "On Scene", ButtonColor = "#262626", NoteType = (int)CustomStateNoteTypes.Optional, DetailType = (int)CustomStateDetailTypes.Calls });
-			details.Add(new CustomStateDetail() { CustomStateDetailId = (int)ActionTypes.StandingBy, ButtonText = "Standing By", ButtonColor = "#d1dade", NoteType = (int)CustomStateNoteTypes.Optional, DetailType = (int)CustomStateDetailTypes.Stations });
-			details.Add(new CustomStateDetail() { CustomStateDetailId = (int)ActionTypes.AvailableStation, ButtonText = "Available Station", ButtonColor = "#d1dade", NoteType = (int)CustomStateNoteTypes.Optional, DetailType = (int)CustomStateDetailTypes.Stations });
-			details.Add(new CustomStateDetail() { CustomStateDetailId = (int)ActionTypes.RespondingToStation, ButtonText = "Responding to Station", ButtonColor = "#449d44", NoteType = (int)CustomStateNoteTypes.Optional, DetailType = (int)CustomStateDetailTypes.Stations });
-			details.Add(new CustomStateDetail() { CustomStateDetailId = (int)ActionTypes.RespondingToScene, ButtonText = "Responding to Scene", ButtonColor = "#449d44", NoteType = (int)CustomStateNoteTypes.Optional, DetailType = (int)CustomStateDetailTypes.Calls });
+			details.Add(new CustomStateDetail() { CustomStateDetailId = (int)ActionTypes.Responding, ButtonText = "Responding", ButtonColor = "#449d44", TextColor = "#ffffff", NoteType = (int)CustomStateNoteTypes.Optional, DetailType = (int)CustomStateDetailTypes.CallsAndStations });
+			details.Add(new CustomStateDetail() { CustomStateDetailId = (int)ActionTypes.NotResponding, ButtonText = "Not Responding", ButtonColor = "#ed5565", TextColor = "#ffffff", NoteType = (int)CustomStateNoteTypes.Optional });
+			details.Add(new CustomStateDetail() { CustomStateDetailId = (int)ActionTypes.OnScene, ButtonText = "On Scene", ButtonColor = "#262626", TextColor = "#ffffff", NoteType = (int)CustomStateNoteTypes.Optional, DetailType = (int)CustomStateDetailTypes.Calls });
+			details.Add(new CustomStateDetail() { CustomStateDetailId = (int)ActionTypes.StandingBy, ButtonText = "Standing By", ButtonColor = "#d1dade", TextColor = "5E5E5E", NoteType = (int)CustomStateNoteTypes.Optional, DetailType = (int)CustomStateDetailTypes.Stations });
+			details.Add(new CustomStateDetail() { CustomStateDetailId = (int)ActionTypes.AvailableStation, ButtonText = "Available Station", ButtonColor = "#d1dade", TextColor = "5E5E5E", NoteType = (int)CustomStateNoteTypes.Optional, DetailType = (int)CustomStateDetailTypes.Stations });
+			details.Add(new CustomStateDetail() { CustomStateDetailId = (int)ActionTypes.RespondingToStation, ButtonText = "Responding to Station", ButtonColor = "#449d44", TextColor = "#ffffff", NoteType = (int)CustomStateNoteTypes.Optional, DetailType = (int)CustomStateDetailTypes.Stations });
+			details.Add(new CustomStateDetail() { CustomStateDetailId = (int)ActionTypes.RespondingToScene, ButtonText = "Responding to Scene", ButtonColor = "#449d44", TextColor = "#ffffff", NoteType = (int)CustomStateNoteTypes.Optional, DetailType = (int)CustomStateDetailTypes.Calls });
 
 			return details;
 		}
@@ -337,11 +355,11 @@ namespace Resgrid.Services
 		public List<CustomStateDetail> GetDefaultPersonStaffings()
 		{
 			List<CustomStateDetail> details = new List<CustomStateDetail>();
-			details.Add(new CustomStateDetail() { CustomStateDetailId = (int)UserStateTypes.Available, ButtonText = "Available", ButtonColor = "#d1dade", NoteType = (int)CustomStateNoteTypes.Optional });
-			details.Add(new CustomStateDetail() { CustomStateDetailId = (int)UserStateTypes.Delayed, ButtonText = "Delayed", ButtonColor = "#f8ac59", NoteType = (int)CustomStateNoteTypes.Optional });
-			details.Add(new CustomStateDetail() { CustomStateDetailId = (int)UserStateTypes.Unavailable, ButtonText = "Unavailable", ButtonColor = "#ed5565", NoteType = (int)CustomStateNoteTypes.Optional });
-			details.Add(new CustomStateDetail() { CustomStateDetailId = (int)UserStateTypes.Committed, ButtonText = "Committed", ButtonColor = "#23c6c8", NoteType = (int)CustomStateNoteTypes.Optional });
-			details.Add(new CustomStateDetail() { CustomStateDetailId = (int)UserStateTypes.OnShift, ButtonText = "On Shift", ButtonColor = "#228bcb", NoteType = (int)CustomStateNoteTypes.Optional });
+			details.Add(new CustomStateDetail() { CustomStateDetailId = (int)UserStateTypes.Available, ButtonText = "Available", ButtonColor = "#d1dade", TextColor = "5E5E5E", NoteType = (int)CustomStateNoteTypes.Optional });
+			details.Add(new CustomStateDetail() { CustomStateDetailId = (int)UserStateTypes.Delayed, ButtonText = "Delayed", ButtonColor = "#f8ac59", TextColor = "#ffffff", NoteType = (int)CustomStateNoteTypes.Optional });
+			details.Add(new CustomStateDetail() { CustomStateDetailId = (int)UserStateTypes.Unavailable, ButtonText = "Unavailable", ButtonColor = "#ed5565", TextColor = "#ffffff", NoteType = (int)CustomStateNoteTypes.Optional });
+			details.Add(new CustomStateDetail() { CustomStateDetailId = (int)UserStateTypes.Committed, ButtonText = "Committed", ButtonColor = "#23c6c8", TextColor = "#ffffff", NoteType = (int)CustomStateNoteTypes.Optional });
+			details.Add(new CustomStateDetail() { CustomStateDetailId = (int)UserStateTypes.OnShift, ButtonText = "On Shift", ButtonColor = "#228bcb", TextColor = "#ffffff", NoteType = (int)CustomStateNoteTypes.Optional });
 		
 
 			return details;

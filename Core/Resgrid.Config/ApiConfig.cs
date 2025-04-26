@@ -14,5 +14,15 @@
 		/// Allowed Methods (verbs) for CORS access. NOTE: CANNOT BE SET VIA THE CONFIG FILE.
 		/// </summary>
 		public const string CorsAllowedMethods = "GET,POST,PUT,DELETE,OPTIONS";
+
+		/// <summary>
+		/// Key used for authing with the backend internal apis
+		/// </summary>
+		public static string BackendInternalApikey = "";
+
+		/// <summary>
+		/// Used to bypass SSL checks, which is needed for self-signed certs
+		/// </summary>
+		public static bool BypassSslChecks = false;
 	}
 }
